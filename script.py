@@ -56,14 +56,17 @@ def send_to_telegram(message, file_path):
         app.send_document(chat_id=TELEGRAM_CHAT_ID, document=file_path)
 
 if name == "main":
-    # Inputs
-    json_url = "https://raw.githubusercontent.com/<username>/<repo>/main/ip_ports.json"
-    public_ip = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+    try:
+        # Inputs
+        json_url = "https://raw.githubusercontent.com/<username>/<repo>/main/ip_ports.json"
+        public_ip = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
 
-    # Generate configurations
-    wg_config, private_key = generate_wireguard_config(json_url, public_ip)
-    v2ray_uri = generate_v2ray_uri(public_ip)
+        # Generate configurations
+        wg_config, private_key = generate_wireguard_config(json_url, public_ip)
+        v2ray_uri = generate_v2ray_uri(public_ip)
 
-    # Send to Telegram
-    message = f"WireGuard Config:\n{wg_config}\n\nV2Ray URI:\n{v2ray_uri}"
-    send_to_telegram(message, "wireguard.conf")
+        # Send to Telegram
+        message = f"WireGuard Config:\n{wg_config}\n\nV2Ray URI:\n{v2ray_uri}"
+        send_to_telegram(message, "wireguard.conf")
+    except Exception as e:
+        print(f"Error: {e}")

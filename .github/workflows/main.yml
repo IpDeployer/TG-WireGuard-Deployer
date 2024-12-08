@@ -31,17 +31,27 @@ jobs:
           import sys
           from telegram import Bot
           from telegram.error import TelegramError
-          import json
 
-          sys.path.append('.')
-          from script.py import generate_wireguard_config  # Adjust the path
+          sys.path.append('.')  # Ensure the script is accessible in the current directory
+          from script import generate_wireguard_config  # Adjust path if script is in a subdirectory
 
+          # Generate WireGuard configuration
           config_json, config_url = generate_wireguard_config()
-          
+
+          # Initialize bot
           bot = Bot(token="$TELEGRAM_BOT_TOKEN")
           try:
-              bot.send_message(chat_id="$TELEGRAM_CHANNEL_ID", text="Here's your new WireGuard config:\n\n```json\n" + config_json + "\n```")
-              bot.send_message(chat_id="$TELEGRAM_CHANNEL_ID", text="WireGuard URL:\n" + config_url)
+              # Send configuration as a JSON block
+              bot.send_message(
+                  chat_id="$TELEGRAM_CHANNEL_ID",
+                  text=f"Here's your new WireGuard config:\n\n```json\n{config_json}\n```",
+                  parse_mode="MarkdownV2"
+              )
+              # Send configuration URL
+              bot.send_message(
+                  chat_id="$TELEGRAM_CHANNEL_ID",
+                  text=f"WireGuard URL:\n{config_url}"
+              )
           except TelegramError as e:
               print(f"An error occurred: {e}")
           EOF

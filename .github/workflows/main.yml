@@ -73,8 +73,8 @@ jobs:
         CONFIG_JSON=$(<config.json)
         CONFIG_URL=$(<config_url.txt)
 
-        # Combine the JSON config and URL in one message
-        MESSAGE="Generated WireGuard Config:\n\`\`\`\n${CONFIG_JSON}\n\`\`\`\n\nWireGuard URL:\n${CONFIG_URL}"
+        # Create the message with proper formatting
+        MESSAGE="Generated WireGuard Config and URL:\n\n\`\`\`json\n${CONFIG_JSON}\n\`\`\`\n\nWireGuard URL:\n${CONFIG_URL}"
 
         # Send the combined message
         curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \

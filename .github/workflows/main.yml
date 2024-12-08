@@ -1,8 +1,6 @@
-
 name: V2Ray WireGuard URI Generator and Telegram Notifier
 
 on:
-  workflow_dispatch:
   schedule:
     - cron: '0 * * * *' # Runs every hour on the hour
 
@@ -20,17 +18,17 @@ jobs:
 
     - name: Install dependencies
       run: |
+        sudo apt-get update && sudo apt-get install -y wireguard
         python -m pip install --upgrade pip
-        pip install python-telegram-bot wireguard-tools
+        pip install python-telegram-bot
 
     - name: Generate WireGuard URI
       id: generate_uri
       run: |
-        # Generate WireGuard keys and configuration
         wg genkey | tee privatekey | wg pubkey > publickey
-        echo "wg_uri=$(cat privatekey | base64 | tr -d '\n')" >> $GITHUB_ENV
-        # Here you would typically create a more complex WireGuard config, but for simplicity:
-        echo "v2ray_wg_uri=wireguard://$(cat publickey)?$(cat privatekey | base64 | tr -d '\n')" >> $GITHUB_ENV
+        private_key=$(cat privatekey | base64 | tr -d '\n')
+        public_key=$(cat publickey)
+        echo "v2ray_wg_uri=wireguard://$public_key?$private_key" >> $GITHUB_ENV
 
     - name: Send URI to Telegram
       env:
@@ -38,4 +36,9 @@ jobs:
         CHANNEL_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         V2RAY_WG_URI: ${{ env.v2ray_wg_uri }}
       run: |
-        python -c "from telegram import Bot; bot = Bot('$TELEGRAM_BOT_TOKEN'); bot.send_message(chat_id='$CHANNEL_ID', text='New V2Ray WireGuard URI:\n$V2RAY_WG_URI')"
+        python -c "
+from telegram import Bot
+import os
+bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
+bot.send_message(chat_id=os.getenv('CHANNEL_ID'), text=f'New V2Ray WireGuard URI:\n{os.getenv('V2RAY_WG_URI')}')
+"

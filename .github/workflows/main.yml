@@ -15,7 +15,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y wireguard-tools python3-pip
-        pip install pyrogram requests
+        pip install pyrogram requests TgCrypto
 
     - name: Run Script
       env:

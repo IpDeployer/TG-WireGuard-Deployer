@@ -67,7 +67,7 @@ jobs:
     - name: Send to Telegram
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        CHAT_ID: ${{ secrets.MY_CHAT_ID }}
+        CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
         # Read the files
         CONFIG_JSON=$(<config.json)

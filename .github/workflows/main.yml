@@ -15,25 +15,24 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y wireguard-tools wireguard
+        sudo apt-get install -y wireguard-tools
+        if [ $? -ne 0 ]; then
+          echo "Error: WireGuard installation failed."
+          exit 1
+        fi
         python -m pip install --upgrade pip
         pip install python-telegram-bot
 
     - name: Verify WireGuard installation
-      run: |
-        if ! command -v wg &> /dev/null; then
-          echo "WireGuard not found!" >&2
-          exit 1
-        fi
+      run: which wg || { echo "WireGuard not found"; exit 1; }
 
     - name: Generate WireGuard URI
       id: generate_uri
       run: |
-        private_key=$(wg genkey)
-        public_key=$(echo "$private_key" | wg pubkey)
-        private_key_encoded=$(echo -n "$private_key" | base64 | tr -d '\n')
-        export V2RAY_WG_URI="wireguard://$public_key?$private_key_encoded"
-        echo "v2ray_wg_uri=$V2RAY_WG_URI" >> $GITHUB_ENV
+        wg genkey | tee privatekey | wg pubkey > publickey
+        private_key=$(cat privatekey | base64 | tr -d '\n')
+        public_key=$(cat publickey)
+        echo "v2ray_wg_uri=wireguard://$public_key?$private_key" >> $GITHUB_ENV
 
     - name: Send URI to Telegram
       env:
@@ -41,17 +40,9 @@ jobs:
         CHANNEL_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         V2RAY_WG_URI: ${{ env.v2ray_wg_uri }}
       run: |
-        python <<EOF
-from telegram import Bot
-import os
-
-bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-channel_id = os.getenv("CHANNEL_ID")
-v2ray_wg_uri = os.getenv("V2RAY_WG_URI")
-
-if not bot_token or not channel_id or not v2ray_wg_uri:
-    raise ValueError("Missing required environment variables")
-
-bot = Bot(token=bot_token)
-bot.send_message(chat_id=channel_id, text=f"New V2Ray WireGuard URI:\n{v2ray_wg_uri}")
-EOF
+        python -c "
+        from telegram import Bot
+        import os
+        bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
+        bot.send_message(chat_id=os.getenv('CHANNEL_ID'), text=f'New V2Ray WireGuard URI:\\n{os.getenv(\"V2RAY_WG_URI\")}')
+        "

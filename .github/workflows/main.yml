@@ -1,52 +1,47 @@
-name: V2Ray WireGuard URI Generator and Telegram Notifier
+name: Send WireGuard Config to Telegram
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 * * * *' # Runs every hour on the hour
+    - cron: '0 0 * * *' # Daily at midnight
+  workflow_dispatch:
 
 jobs:
-  generate_and_send:
+  send_wireguard_config:
     runs-on: ubuntu-latest
     steps:
-    - name: Check out repository code
-      uses: actions/checkout@v4 # Updated to the latest version of checkout action
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wireguard-tools
-        if [ $? -ne 0 ]; then
-          echo "Error: WireGuard installation failed."
-          exit 1
-        fi
-        python3 -m pip install --upgrade pip
-        pip3 install python-telegram-bot
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
-    - name: Verify WireGuard installation
-      run: |
-        if ! command -v wg &> /dev/null; then
-          echo "WireGuard not found"
-          exit 1
-        fi
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install python-telegram-bot
 
-    - name: Generate WireGuard URI
-      id: generate_uri
-      run: |
-        wg genkey | tee privatekey | wg pubkey > publickey
-        private_key=$(cat privatekey | base64 | tr -d '\n')
-        public_key=$(cat publickey)
-        echo "v2ray_wg_uri=wireguard://$public_key?$private_key" >> $GITHUB_OUTPUT
+      - name: Generate and Send WireGuard Config
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - << EOF
+          import sys
+          from telegram import Bot
+          from telegram.error import TelegramError
+          import json
 
-    - name: Send URI to Telegram
-      env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        CHANNEL_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        V2RAY_WG_URI: ${{ steps.generate_uri.outputs.v2ray_wg_uri }}
-      run: |
-        python3 -c "
-        from telegram import Bot
-        import os
-        bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
-        bot.send_message(chat_id=os.getenv('CHANNEL_ID'), text=f'New V2Ray WireGuard URI:\n{os.getenv(\"V2RAY_WG_URI\")}')
-        "
+          sys.path.append('.')
+          from scrscript.py import generate_wireguard_config  # Adjust the path
+
+          config_json, config_url = generate_wireguard_config()
+          
+          bot = Bot(token="$TELEGRAM_BOT_TOKEN")
+          try:
+              bot.send_message(chat_id="$TELEGRAM_CHANNEL_ID", text="Here's your new WireGuard config:\n\n```json\n" + config_json + "\n```")
+              bot.send_message(chat_id="$TELEGRAM_CHANNEL_ID", text="WireGuard URL:\n" + config_url)
+          except TelegramError as e:
+              print(f"An error occurred: {e}")
+          EOF

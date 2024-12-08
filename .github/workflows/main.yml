@@ -1,4 +1,70 @@
-- name: Send to Telegram
+name: Generate and Send WireGuard Config
+
+on:
+  push:
+    branches:
+      - main  # Trigger on push to the main branch
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  generate-and-send:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: python -m pip install --upgrade pip
+
+    - name: Generate WireGuard Config
+      id: generate_config
+      run: |
+        python <<EOF
+        import json
+        import base64
+        import os
+
+        def generate_wireguard_config():
+            config = {
+                "local_address": [
+                    "172.16.0.2/32",
+                    "2606:4700:110:8a6d:21bd:c9c1:a8:747a/128"
+                ],
+                "mtu": 1280,
+                "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+                "private_key": base64.b64encode(os.urandom(32)).decode(),
+                "reserved": [
+                    149, 94, 161
+                ],
+                "server": "engage.cloudflareclient.com",
+                "server_port": 2408
+            }
+
+            wg_url = f"wireguard://{config['private_key'].replace('/', '%2F').replace('+', '%2B').replace('=', '%3D')}@{config['server']}:{config['server_port']}?address={','.join(config['local_address']).replace('/', '%2F').replace(':', '%3A')}&reserved={','.join(map(str, config['reserved']))}&publickey={config['peer_public_key'].replace('/', '%2F').replace('+', '%2B').replace('=', '%3D')}&mtu={config['mtu']}#Warp"
+
+            return json.dumps(config, indent=2), wg_url
+
+        config_json, config_url = generate_wireguard_config()
+
+        # Save the outputs to files
+        with open("config.json", "w") as f:
+            f.write(config_json)
+        with open("config_url.txt", "w") as f:
+            f.write(config_url)
+        EOF
+
+    - name: Display Generated Config
+      run: |
+        cat config.json
+        cat config_url.txt
+
+    - name: Send to Telegram
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         CHAT_ID: ${{ secrets.MY_CHAT_ID }}
@@ -7,8 +73,8 @@
         CONFIG_JSON=$(<config.json)
         CONFIG_URL=$(<config_url.txt)
 
-        # Combine both messages
-        MESSAGE="Generated WireGuard Config:\n\n\`\`\`\n${CONFIG_JSON}\n\`\`\`\n\nWireGuard URL:\n\n${CONFIG_URL}"
+        # Combine the JSON config and URL in one message
+        MESSAGE="Generated WireGuard Config:\n\`\`\`\n${CONFIG_JSON}\n\`\`\`\n\nWireGuard URL:\n${CONFIG_URL}"
 
         # Send the combined message
         curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \

@@ -67,17 +67,17 @@ jobs:
     - name: Send to Telegram
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
         # Read the files
         CONFIG_JSON=$(<config.json)
         CONFIG_URL=$(<config_url.txt)
 
-        # Create the message with proper formatting
-        MESSAGE="Generated WireGuard Config and URL:\n\n\`\`\`json\n${CONFIG_JSON}\n\`\`\`\n\nWireGuard URL:\n${CONFIG_URL}"
+        # Cleanly format the message to avoid unwanted spaces or newlines
+        MESSAGE="Generated WireGuard Config and URL:\n\n\`\`\`json\n${CONFIG_JSON}\n\`\`\`\n\nWireGuard URL:\n\`\`\`\n${CONFIG_URL}\n\`\`\`"
 
         # Send the combined message
         curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
-          -d chat_id="${CHAT_ID}" \
+          -d chat_id="${TELEGRAM_CHAT_ID}" \
           -d text="${MESSAGE}" \
           -d parse_mode="Markdown"

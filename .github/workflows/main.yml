@@ -1,28 +1,4 @@
-name: Send WireGuard Config to Telegram
-
-on:
-  schedule:
-    - cron: '0 0 * * *' # Daily at midnight
-  workflow_dispatch:
-
-jobs:
-  send_wireguard_config:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install python-telegram-bot
-
-      - name: Generate and Send WireGuard Config
+- name: Generate and Send WireGuard Config
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -32,43 +8,32 @@ jobs:
           from telegram import Bot
           from telegram.error import TelegramError
 
-          # Mock implementation for demonstration purposes.
+          # Mock implementation for demonstration purposes
           def generate_wireguard_config():
-              config_json = {
-                  "interface": {
-                      "address": "10.0.0.1/24",
-                      "private_key": "your-private-key",
-                      "dns": ["1.1.1.1"]
-                  },
-                  "peer": {
-                      "public_key": "peer-public-key",
-                      "allowed_ips": "0.0.0.0/0",
-                      "endpoint": "your-vpn-endpoint"
-                  }
-              }
-              config_url = "https://example.com/wireguard-config"
-              return str(config_json), config_url
+              return '{"key": "value"}', "https://example.com"
 
           print("Generating WireGuard configuration...")
           config_json, config_url = generate_wireguard_config()
 
-          print("Configuration generated. Sending to Telegram...")
+          print(f"Generated Config JSON: {config_json}")
+          print(f"Generated Config URL: {config_url}")
+
           bot = Bot(token="$TELEGRAM_BOT_TOKEN")
+          print("Initialized Telegram Bot.")
+
           try:
-              # Send JSON configuration
               bot.send_message(
                   chat_id="$TELEGRAM_CHANNEL_ID",
-                  text=f"Here's your new WireGuard config:\n\n```json\n{config_json}\n```",
+                  text=f"WireGuard config:\n\n```json\n{config_json}\n```",
                   parse_mode="MarkdownV2"
               )
-              print("Configuration JSON sent.")
-
-              # Send URL
+              print("Config JSON sent successfully.")
+              
               bot.send_message(
                   chat_id="$TELEGRAM_CHANNEL_ID",
-                  text=f"WireGuard URL:\n{config_url}"
+                  text=f"WireGuard URL: {config_url}"
               )
-              print("Configuration URL sent.")
+              print("Config URL sent successfully.")
           except TelegramError as e:
-              print(f"An error occurred while sending the message: {e}")
+              print(f"TelegramError occurred: {e}")
           EOF

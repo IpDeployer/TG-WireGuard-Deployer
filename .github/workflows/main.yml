@@ -57,16 +57,16 @@ jobs:
           config_json, config_url = generate_wireguard_config()
 
           # Send to Telegram
-          bot = Bot(token="${{ secrets.TELEGRAM_BOT_TOKEN }}")
+          bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
           try:
               print("Sending configuration to Telegram...")
               bot.send_message(
-                  chat_id="${{ secrets.TELEGRAM_CHANNEL_ID }}",
+                  chat_id=os.getenv("TELEGRAM_CHANNEL_ID"),
                   text=f"WireGuard configuration:\n\n```json\n{config_json}\n```",
                   parse_mode="Markdown"
               )
               bot.send_message(
-                  chat_id="${{ secrets.TELEGRAM_CHANNEL_ID }}",
+                  chat_id=os.getenv("TELEGRAM_CHANNEL_ID"),
                   text=f"WireGuard URL: {config_url}"
               )
               print("Configuration successfully sent.")

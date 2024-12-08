@@ -2,7 +2,7 @@
 name: V2Ray WireGuard URI Generator and Telegram Notifier
 
 on:
-  workflow_workflow_dispatch:
+  workflow_dispatch:
   schedule:
     - cron: '0 * * * *' # Runs every hour on the hour
 

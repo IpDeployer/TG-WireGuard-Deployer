@@ -55,7 +55,7 @@ def send_to_telegram(message, file_path):
         app.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
         app.send_document(chat_id=TELEGRAM_CHAT_ID, document=file_path)
 
-if name == "main":
+if __name__ == "__main__":
     try:
         # Inputs
         json_url = "https://raw.githubusercontent.com/<username>/<repo>/main/ip_ports.json"

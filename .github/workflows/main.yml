@@ -1,75 +1,85 @@
-name: Send WireGuard Config to Telegram
+name: Generate and Send WireGuard Config
 
 on:
-  schedule:
-    - cron: '0 0 * * *' # Daily at midnight
-  workflow_dispatch:
+  push:
+    branches:
+      - main  # Trigger on push to the main branch
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
-  send_wireguard_config:
+  generate-and-send:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install python-telegram-bot
+    - name: Install dependencies
+      run: python -m pip install --upgrade pip
 
-      - name: Generate and Send WireGuard Config
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python - << EOF
-          import json
-          import base64
-          import os
-          from telegram import Bot
-          from telegram.error import TelegramError
+    - name: Generate WireGuard Config
+      id: generate_config
+      run: |
+        python <<EOF
+        import json
+        import base64
+        import os
 
-          def generate_wireguard_config():
-              config = {
-                  "local_address": [
-                      "172.16.0.2/32",
-                      "2606:4700:110:8a6d:21bd:c9c1:a8:747a/128"
-                  ],
-                  "mtu": 1280,
-                  "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-                  "private_key": base64.b64encode(os.urandom(32)).decode(),
-                  "reserved": [149, 94, 161],
-                  "server": "engage.cloudflareclient.com",
-                  "server_port": 2408
-              }
+        def generate_wireguard_config():
+            config = {
+                "local_address": [
+                    "172.16.0.2/32",
+                    "2606:4700:110:8a6d:21bd:c9c1:a8:747a/128"
+                ],
+                "mtu": 1280,
+                "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+                "private_key": base64.b64encode(os.urandom(32)).decode(),
+                "reserved": [
+                    149, 94, 161
+                ],
+                "server": "engage.cloudflareclient.com",
+                "server_port": 2408
+            }
 
-              wg_url = f"wireguard://{config['private_key'].replace('/', '%2F').replace('+', '%2B').replace('=', '%3D')}@{config['server']}:{config['server_port']}?address={','.join(config['local_address']).replace('/', '%2F').replace(':', '%3A')}&reserved={','.join(map(str, config['reserved']))}&publickey={config['peer_public_key'].replace('/', '%2F').replace('+', '%2B').replace('=', '%3D')}&mtu={config['mtu']}#Warp"
+            wg_url = f"wireguard://{config['private_key'].replace('/', '%2F').replace('+', '%2B').replace('=', '%3D')}@{config['server']}:{config['server_port']}?address={','.join(config['local_address']).replace('/', '%2F').replace(':', '%3A')}&reserved={','.join(map(str, config['reserved']))}&publickey={config['peer_public_key'].replace('/', '%2F').replace('+', '%2B').replace('=', '%3D')}&mtu={config['mtu']}#Warp"
 
-              return json.dumps(config, indent=2), wg_url
+            return json.dumps(config, indent=2), wg_url
 
-          # Generate WireGuard Config
-          print("Generating WireGuard configuration...")
-          config_json, config_url = generate_wireguard_config()
+        config_json, config_url = generate_wireguard_config()
 
-          # Send to Telegram
-          bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
-          try:
-              print("Sending configuration to Telegram...")
-              bot.send_message(
-                  chat_id=os.getenv("TELEGRAM_CHANNEL_ID"),
-                  text=f"WireGuard configuration:\n\n```json\n{config_json}\n```",
-                  parse_mode="Markdown"
-              )
-              bot.send_message(
-                  chat_id=os.getenv("TELEGRAM_CHANNEL_ID"),
-                  text=f"WireGuard URL: {config_url}"
-              )
-              print("Configuration successfully sent.")
-          except TelegramError as e:
-              print(f"Telegram error occurred: {e}")
-          EOF
+        # Save the outputs to files
+        with open("config.json", "w") as f:
+            f.write(config_json)
+        with open("config_url.txt", "w") as f:
+            f.write(config_url)
+        EOF
+
+    - name: Display Generated Config
+      run: |
+        cat config.json
+        cat config_url.txt
+
+    - name: Send to Telegram
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        CHAT_ID: ${{ secrets.MY_CHAT_ID }}
+      run: |
+        # Read the files
+        CONFIG_JSON=$(<config.json)
+        CONFIG_URL=$(<config_url.txt)
+
+        # Send the JSON configuration
+        curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
+          -d chat_id="${CHAT_ID}" \
+          -d text="Generated WireGuard Config:\n\n\`\`\`\n${CONFIG_JSON}\n\`\`\`" \
+          -d parse_mode="Markdown"
+
+        # Send the URL
+        curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
+          -d chat_id="${CHAT_ID}" \
+          -d text="WireGuard URL:\n\n${CONFIG_URL}"

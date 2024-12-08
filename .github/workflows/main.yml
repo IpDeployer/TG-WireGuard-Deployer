@@ -32,26 +32,43 @@ jobs:
           from telegram import Bot
           from telegram.error import TelegramError
 
-          sys.path.append('.')  # Ensure the script is accessible in the current directory
-          from script import generate_wireguard_config  # Adjust path if script is in a subdirectory
+          # Mock implementation for demonstration purposes.
+          def generate_wireguard_config():
+              config_json = {
+                  "interface": {
+                      "address": "10.0.0.1/24",
+                      "private_key": "your-private-key",
+                      "dns": ["1.1.1.1"]
+                  },
+                  "peer": {
+                      "public_key": "peer-public-key",
+                      "allowed_ips": "0.0.0.0/0",
+                      "endpoint": "your-vpn-endpoint"
+                  }
+              }
+              config_url = "https://example.com/wireguard-config"
+              return str(config_json), config_url
 
-          # Generate WireGuard configuration
+          print("Generating WireGuard configuration...")
           config_json, config_url = generate_wireguard_config()
 
-          # Initialize bot
+          print("Configuration generated. Sending to Telegram...")
           bot = Bot(token="$TELEGRAM_BOT_TOKEN")
           try:
-              # Send configuration as a JSON block
+              # Send JSON configuration
               bot.send_message(
                   chat_id="$TELEGRAM_CHANNEL_ID",
                   text=f"Here's your new WireGuard config:\n\n```json\n{config_json}\n```",
                   parse_mode="MarkdownV2"
               )
-              # Send configuration URL
+              print("Configuration JSON sent.")
+
+              # Send URL
               bot.send_message(
                   chat_id="$TELEGRAM_CHANNEL_ID",
                   text=f"WireGuard URL:\n{config_url}"
               )
+              print("Configuration URL sent.")
           except TelegramError as e:
-              print(f"An error occurred: {e}")
+              print(f"An error occurred while sending the message: {e}")
           EOF

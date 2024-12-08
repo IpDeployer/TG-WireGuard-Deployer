@@ -1,48 +1,25 @@
-name: V2Ray WireGuard URI Generator and Telegram Notifier
+- name: Send URI to Telegram
+  env:
+    TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+    CHANNEL_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    V2RAY_WG_URI: ${{ env.v2ray_wg_uri }}
+  run: |
+    python -c "
+    from telegram import Bot
+    import os
+    import logging
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 * * * *' # Runs every hour on the hour
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
 
-jobs:
-  generate_and_send:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Check out repository code
-      uses: actions/checkout@v3
+    bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
+    logger.info(f'Bot token: {os.getenv('TELEGRAM_BOT_TOKEN')}')
+    logger.info(f'Channel ID: {os.getenv('CHANNEL_ID')}')
+    logger.info(f'Message to send: New V2Ray WireGuard URI:\n{os.getenv('V2RAY_WG_URI')}')
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wireguard-tools
-        if [ $? -ne 0 ]; then
-          echo "Error: WireGuard installation failed."
-          exit 1
-        fi
-        python -m pip install --upgrade pip
-        pip install python-telegram-bot
-
-    - name: Verify WireGuard installation
-      run: which wg || { echo "WireGuard not found"; exit 1; }
-
-    - name: Generate WireGuard URI
-      id: generate_uri
-      run: |
-        wg genkey | tee privatekey | wg pubkey > publickey
-        private_key=$(cat privatekey | base64 | tr -d '\n')
-        public_key=$(cat publickey)
-        echo "v2ray_wg_uri=wireguard://$public_key?$private_key" >> $GITHUB_ENV
-
-    - name: Send URI to Telegram
-      env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        CHANNEL_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        V2RAY_WG_URI: ${{ env.v2ray_wg_uri }}
-      run: |
-        python -c "
-        from telegram import Bot
-        import os
-        bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
-        bot.send_message(chat_id=os.getenv('CHANNEL_ID'), text=f'New V2Ray WireGuard URI:\\n{os.getenv(\"V2RAY_WG_URI\")}')
-        "
+    try:
+        bot.send_message(chat_id=os.getenv('CHANNEL_ID'), text=f'New V2Ray WireGuard URI:\n{os.getenv('V2RAY_WG_URI')}')
+        logger.info('Message sent successfully')
+    except Exception as e:
+        logger.error(f'Failed to send message: {str(e)}')
+    "

@@ -34,7 +34,7 @@ jobs:
           import json
 
           sys.path.append('.')
-          from path.to.your.script import generate_wireguard_config  # Adjust the path
+          from script.py import generate_wireguard_config  # Adjust the path
 
           config_json, config_url = generate_wireguard_config()
           

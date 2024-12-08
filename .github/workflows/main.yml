@@ -12,16 +12,15 @@ jobs:
     - name: Check out repository code
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
-
     - name: Install dependencies
       run: |
-        sudo apt-get update && sudo apt-get install -y wireguard
+        sudo apt-get update
+        sudo apt-get install -y wireguard-tools wireguard
         python -m pip install --upgrade pip
         pip install python-telegram-bot
+
+    - name: Verify WireGuard installation
+      run: which wg
 
     - name: Generate WireGuard URI
       id: generate_uri
@@ -41,5 +40,5 @@ jobs:
 from telegram import Bot
 import os
 bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
-bot.send_message(chat_id=os.getenv('CHANNEL_ID'), text=f'New V2Ray WireGuard URI:\n{os.getenv('V2RAY_WG_URI')}')
+bot.send_message(chat_id=os.getenv('CHANNEL_ID'), text=f'New V2Ray WireGuard URI:\\n{os.getenv(\"V2RAY_WG_URI\")}')
 "

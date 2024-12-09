@@ -1,13 +1,21 @@
+import os
 import time
 import requests
 import json
 
 # Load secrets from environment variables
-TELEGRAM_TOKEN = "<your_telegram_bot_token>"  # Replace with the GitHub Actions secret name
-TELEGRAM_CHAT_ID = "<your_channel_chat_id>"  # Replace with the GitHub Actions secret name
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+    raise ValueError("Environment variables TELEGRAM_TOKEN and TELEGRAM_CHAT_ID are required")
+
 
 def generate_configuration():
-    # Simulate the configuration generation process
+    """
+    Simulate generating a WireGuard configuration for Cloudflare Warp.
+    Replace this function with your actual configuration generation logic.
+    """
     config = {
         "peer_public_key": "samplePublicKey",
         "server": "sample.server.com",
@@ -18,7 +26,11 @@ def generate_configuration():
     }
     return json.dumps(config, indent=4)
 
+
 def send_to_telegram(message):
+    """
+    Send the given message to the specified Telegram channel.
+    """
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -29,6 +41,7 @@ def send_to_telegram(message):
         print("Message sent successfully!")
     else:
         print(f"Failed to send message: {response.text}")
+
 
 if __name__ == "__main__":
     while True:

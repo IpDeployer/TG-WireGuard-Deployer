@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the repository
+      # Step 1: Checkout the code from the repository
       - name: Checkout code
         uses: actions/checkout@v2
 
@@ -34,23 +34,27 @@ jobs:
           yes | $HOME/Android/Sdk/cmdline-tools/bin/sdkmanager --licenses
           $HOME/Android/Sdk/cmdline-tools/bin/sdkmanager "platforms;android-30" "build-tools;30.0.3" "platform-tools"
 
-      # Step 4: Set up Gradle and build the project
-      - name: Set up Gradle
-        uses: gradle/wrapper-validation-action@v1
+      # Step 4: Build the Android project
       - name: Build with Gradle
         run: ./gradlew build
 
-      # Step 5: Run Tests (optional, depends on whether you have tests)
+      # Step 5: Run tests (optional)
       - name: Run Tests
         run: ./gradlew test
 
-      # Step 6: Generate WireGuard config and send it to Telegram
+      # Step 6: Generate WireGuard configuration and send to Telegram
       - name: Generate WireGuard config and send to Telegram
         run: |
-          # Generate the WireGuard config (This could be done with a script you write in your project)
+          # Generate WireGuard config (ensure you have the correct script or gradle task)
           CONFIG=$(./gradlew generateWireGuardConfig)
 
-          # Send the configuration to the Telegram channel
+          # Ensure the WireGuard config is not empty
+          if [ -z "$CONFIG" ]; then
+            echo "WireGuard configuration generation failed."
+            exit 1
+          fi
+
+          # Send the configuration to Telegram using Telegram Bot API
           curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d "text=$CONFIG"

@@ -67,8 +67,8 @@ jobs:
               chat_id = os.environ['TELEGRAM_CHANNEL_ID']
               
               # Send the combined message with JSON and URL
-              message = f"WireGuard Configuration:\n\n```\n{config_json}\n```\n\nConfiguration URI:\n{config_url}"
-              bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
+              message = f"WireGuard Configuration:\n\n{config_json}\n\nConfiguration URI:\n{config_url}"
+              bot.send_message(chat_id=chat_id, text=message)
               
               print("Message sent successfully to Telegram.")
           except TelegramError as e:

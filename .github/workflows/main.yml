@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.9'  # Using 3.9 for better compatibility with older libraries
+          python-version: '3.9'
 
       - name: Install dependencies
         run: |
@@ -33,7 +33,7 @@ jobs:
           from telegram import Bot
           from telegram.error import TelegramError
           import json
-          from urllib.parse import quote
+          from urllib.parse import urlencode, quote
 
           def generate_wireguard_config():
               config = {
@@ -48,16 +48,18 @@ jobs:
                   "server": "engage.cloudflareclient.com",
                   "server_port": 2408
               }
-              
+
+              # Generate the configuration URI
+              config_url = (
+                  f"wireguard://{quote(config['private_key'])}"
+                  f"@{config['server']}:{config['server_port']}?"
+                  f"address={quote(','.join(config['local_address']))}"
+                  f"&reserved={quote(','.join(map(str, config['reserved'])))}"
+                  f"&publickey={quote(config['peer_public_key'])}"
+                  f"&mtu={config['mtu']}#Warp"
+              )
+
               config_json = json.dumps(config, indent=2, ensure_ascii=False)
-              
-              private_key_quoted = quote(config['private_key'])
-              local_address_quoted = quote(','.join(config['local_address']))
-              reserved_quoted = quote(','.join(map(str, config['reserved'])))
-              public_key_quoted = quote(config['peer_public_key'])
-              
-              config_url = f"wireguard://{private_key_quoted}@{config['server']}:{config['server_port']}?address={local_address_quoted}&reserved={reserved_quoted}&publickey={public_key_quoted}&mtu={config['mtu']}#Warp"
-              
               return config_json, config_url
 
           config_json, config_url = generate_wireguard_config()
@@ -66,7 +68,7 @@ jobs:
           try:
               chat_id = os.environ['TELEGRAM_CHANNEL_ID']
               
-              # Send the combined message with JSON and URL
+              # Combine JSON config and URI into a single message
               message = f"WireGuard Configuration:\n\n{config_json}\n\nConfiguration URI:\n{config_url}"
               bot.send_message(chat_id=chat_id, text=message)
               

@@ -15,12 +15,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: '3.9'  # Using 3.9 for better compatibility with older libraries
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install python-telegram-bot==13.7
+          pip install python-telegram-bot==13.7 urllib3 six  # Ensure urllib3 and six are installed
 
       - name: Generate and Send WireGuard Config
         env:
@@ -29,10 +29,11 @@ jobs:
         run: |
           python - << EOF
           import sys
+          import os
           from telegram import Bot
           from telegram.error import TelegramError
           import json
-          
+
           def generate_wireguard_config():
               # Example function; replace with actual WireGuard config generation logic
               config = {
@@ -52,7 +53,7 @@ jobs:
               return config_json, config_url
 
           config_json, config_url = generate_wireguard_config()
-          
+
           bot = Bot(token=os.environ['TELEGRAM_BOT_TOKEN'])
           try:
               # Ensure that the chat_id is correctly formatted (should start with '-' for groups or channels)

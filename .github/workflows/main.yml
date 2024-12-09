@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install python-telegram-bot==13.7 urllib3 six  # Ensure urllib3 and six are installed
+          pip install python-telegram-bot==13.7 urllib3 six
 
       - name: Generate and Send WireGuard Config
         env:
@@ -33,33 +33,45 @@ jobs:
           from telegram import Bot
           from telegram.error import TelegramError
           import json
+          from urllib.parse import quote
 
           def generate_wireguard_config():
-              # Example function; replace with actual WireGuard config generation logic
               config = {
-                  "Interface": {
-                      "PrivateKey": "your_private_key_here",
-                      "Address": "10.0.0.2/24",
-                      "DNS": "1.1.1.1"
-                  },
-                  "Peer": {
-                      "PublicKey": "server_public_key",
-                      "AllowedIPs": "0.0.0.0/0",
-                      "Endpoint": "vpn.example.com:51820"
-                  }
+                  "local_address": [
+                      "172.16.0.2/32",
+                      "2606:4700:110:8a6d:21bd:c9c1:a8:747a/128"
+                  ],
+                  "mtu": 1280,
+                  "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+                  "private_key": "IKRBbz7Ug/QW7ueR7jy+6awYusXlXeIy4RQliP1k5ko=",
+                  "reserved": [149, 94, 161],
+                  "server": "engage.cloudflareclient.com",
+                  "server_port": 2408
               }
-              config_json = json.dumps(config, indent=2)
-              config_url = "wireguard://example.com/config"  # Placeholder for URL
+              
+              config_json = json.dumps(config, indent=2, ensure_ascii=False)
+              
+              private_key_quoted = quote(config['private_key'])
+              local_address_quoted = quote(','.join(config['local_address']))
+              reserved_quoted = quote(','.join(map(str, config['reserved'])))
+              public_key_quoted = quote(config['peer_public_key'])
+              
+              config_url = f"wireguard://{private_key_quoted}@{config['server']}:{config['server_port']}?address={local_address_quoted}&reserved={reserved_quoted}&publickey={public_key_quoted}&mtu={config['mtu']}#Warp"
+              
               return config_json, config_url
 
           config_json, config_url = generate_wireguard_config()
 
           bot = Bot(token=os.environ['TELEGRAM_BOT_TOKEN'])
           try:
-              # Ensure that the chat_id is correctly formatted (should start with '-' for groups or channels)
               chat_id = os.environ['TELEGRAM_CHANNEL_ID']
-              bot.send_message(chat_id=chat_id, text=f"Here's your new WireGuard config:\n\n```json\n{config_json}\n```", parse_mode='MarkdownV2')
-              bot.send_message(chat_id=chat_id, text=f"WireGuard URL:\n{config_url}")
+              
+              # Send the configuration JSON in the first message
+              bot.send_message(chat_id=chat_id, text=f"{config_json}")
+              
+              # Send the URL in the second message
+              bot.send_message(chat_id=chat_id, text=f"{config_url}")
+              
               print("Messages sent successfully to Telegram.")
           except TelegramError as e:
               print(f"An error occurred while sending messages: {e}")

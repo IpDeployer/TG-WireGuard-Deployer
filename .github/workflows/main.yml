@@ -1,34 +1,32 @@
-name: Telegram Bot
+name: Generate WireGuard Config
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # Run every 5 minutes
-  workflow_dispatch:  # Add manual trigger
+    - cron: '*/5 * * * *' # Run every 5 minutes
 
 jobs:
-  send_config:
+  generate-and-send-config:
     runs-on: ubuntu-latest
-
     steps:
-      # Step 1: Check out the repository
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-      # Step 2: Set up Python with a valid version (Python 3.9 in this case)
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.12  # Use Python 3.9
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x' # Specify your Python version
 
-      # Step 3: Install dependencies
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt # If you have a requirements file
 
-      # Step 4: Run the bot script
-      - name: Run Telegram bot
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python telegram_bot/bot.py
+    - name: Generate WireGuard Config
+      run: python generate-config.py # Assuming this is your main script
+
+    - name: Send Config to Channel
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+      run: |
+        python send_config.py # This script would handle sending the config

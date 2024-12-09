@@ -30,9 +30,14 @@ jobs:
           python - << EOF
           import os
           import json
+          import base64
           import urllib.parse
           from telegram import Bot
           from telegram.error import TelegramError
+
+          def base64_encode(value):
+              """Encodes a string into Base64."""
+              return base64.urlsafe_b64encode(value.encode()).decode()
 
           def generate_wireguard_config():
               config = {
@@ -48,22 +53,25 @@ jobs:
                   "server_port": 2408
               }
 
+              # Base64 encode the private key
+              private_key_b64 = base64_encode(config['private_key'])
+
               # Escape characters for JSON compatibility
+              config['private_key'] = private_key_b64
               config_json = json.dumps(config, indent=2, ensure_ascii=False).replace("=", r"\u003d")
-              
+
               # Encode URL components
-              private_key_encoded = urllib.parse.quote(config['private_key'])
               local_address_encoded = urllib.parse.quote(','.join(config['local_address']).replace("/", r"%2F"))
               reserved_encoded = urllib.parse.quote(','.join(map(str, config['reserved'])))
-              peer_public_key_encoded = urllib.parse.quote(config['peer_public_key'])
+              public_key_encoded = urllib.parse.quote(config['peer_public_key'])
 
               # Construct URI
               config_url = (
-                  f"wireguard://{private_key_encoded}"
+                  f"wireguard://{private_key_b64}"
                   f"@{config['server']}:{config['server_port']}?"
                   f"address={local_address_encoded}"
                   f"&reserved={reserved_encoded}"
-                  f"&publickey={peer_public_key_encoded}"
+                  f"&publickey={public_key_encoded}"
                   f"&mtu={config['mtu']}#Warp"
               )
 

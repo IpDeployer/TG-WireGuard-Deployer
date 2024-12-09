@@ -21,7 +21,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # If wgconfig is not on PyPI, install from source
-          git clone <wgconfig-repository-url> wgconfig-repo
+          git clone https://github.com/towalink/wgconfig.git wgconfig-repo
           cd wgconfig-repo
           python -m pip install .
           cd ..

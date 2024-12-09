@@ -66,13 +66,11 @@ jobs:
           try:
               chat_id = os.environ['TELEGRAM_CHANNEL_ID']
               
-              # Send the configuration JSON in the first message
-              bot.send_message(chat_id=chat_id, text=f"{config_json}")
+              # Send the combined message with JSON and URL
+              message = f"WireGuard Configuration:\n\n```\n{config_json}\n```\n\nConfiguration URI:\n{config_url}"
+              bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
               
-              # Send the URL in the second message
-              bot.send_message(chat_id=chat_id, text=f"{config_url}")
-              
-              print("Messages sent successfully to Telegram.")
+              print("Message sent successfully to Telegram.")
           except TelegramError as e:
-              print(f"An error occurred while sending messages: {e}")
+              print(f"An error occurred while sending the message: {e}")
           EOF

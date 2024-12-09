@@ -14,11 +14,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Python with a valid version
+      # Step 2: Set up Python with a valid version (Python 3.9 in this case)
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.10  # Correct Python version
+          python-version: 3.9  # Use Python 3.9
 
       # Step 3: Install dependencies
       - name: Install dependencies

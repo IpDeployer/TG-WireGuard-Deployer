@@ -39,6 +39,11 @@ jobs:
               """Encodes a string into Base64."""
               return base64.urlsafe_b64encode(value.encode()).decode()
 
+          def encode_reserved(reserved):
+              """Encodes the reserved list into Base64 format."""
+              reserved_bytes = bytes(reserved)
+              return base64.urlsafe_b64encode(reserved_bytes).decode()
+
           def generate_wireguard_config():
               config = {
                   "local_address": [
@@ -53,8 +58,11 @@ jobs:
                   "server_port": 2408
               }
 
-              # Base64 encode the private key only
+              # Base64 encode the private key
               private_key_b64 = base64_encode(config['private_key'])
+
+              # Encode the reserved field as Base64
+              reserved_b64 = encode_reserved(config['reserved'])
 
               # Escape characters for JSON compatibility
               config['private_key'] = private_key_b64
@@ -63,7 +71,6 @@ jobs:
               # Encode URL components
               private_key_encoded = urllib.parse.quote(private_key_b64)
               local_address_encoded = urllib.parse.quote(','.join(config['local_address']))  # Keep as regular strings
-              reserved_encoded = urllib.parse.quote(','.join(map(str, config['reserved'])))
               public_key_encoded = urllib.parse.quote(config['peer_public_key'])
 
               # Construct URI
@@ -71,7 +78,7 @@ jobs:
                   f"wireguard://{private_key_encoded}"
                   f"@{config['server']}:{config['server_port']}?"
                   f"address={local_address_encoded}"
-                  f"&reserved={reserved_encoded}"
+                  f"&reserved={reserved_b64}"
                   f"&publickey={public_key_encoded}"
                   f"&mtu={config['mtu']}#Warp"
               )

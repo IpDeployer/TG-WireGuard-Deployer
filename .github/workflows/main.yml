@@ -20,12 +20,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # If wgconfig is not on PyPI, install from source
-          git clone https://github.com/towalink/wgconfig.git wgconfig-repo
-          cd wgconfig-repo
-          python -m pip install .
-          cd ..
-          # Install other dependencies if needed
           pip install qrcode[pil]
 
       - name: Generate and Send WireGuard Config

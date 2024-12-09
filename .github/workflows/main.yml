@@ -1,6 +1,7 @@
 name: Generate WireGuard Config
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '*/5 * * * *' # Run every 5 minutes
 

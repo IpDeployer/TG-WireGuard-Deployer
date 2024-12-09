@@ -1,91 +1,59 @@
-name: Send WireGuard Config to Telegram
+name: Android CI/CD Workflow
 
 on:
-  schedule:
-    - cron: '0 0 * * *' # Daily at midnight
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  send_wireguard_config:
+  build:
     runs-on: ubuntu-latest
+
     steps:
+      # Step 1: Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      # Step 2: Set up JDK 11 (required for Android projects)
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
         with:
-          python-version: '3.9'
+          java-version: '11'
 
-      - name: Install dependencies
+      # Step 3: Install Android SDK and dependencies
+      - name: Set up Android SDK
         run: |
-          python -m pip install --upgrade pip
-          pip install python-telegram-bot==13.7 urllib3 six
+          echo "Setting up Android SDK"
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          wget https://dl.google.com/android/repository/commandlinetools-linux-6609375_latest.zip
+          unzip commandlinetools-linux-6609375_latest.zip -d $HOME/Android/Sdk
+          yes | $HOME/Android/Sdk/cmdline-tools/bin/sdkmanager --licenses
+          $HOME/Android/Sdk/cmdline-tools/bin/sdkmanager "platforms;android-30" "build-tools;30.0.3" "platform-tools"
 
-      - name: Generate and Send WireGuard Config
+      # Step 4: Set up Gradle and build the project
+      - name: Set up Gradle
+        uses: gradle/wrapper-validation-action@v1
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      # Step 5: Run Tests (optional, depends on whether you have tests)
+      - name: Run Tests
+        run: ./gradlew test
+
+      # Step 6: Generate WireGuard config and send it to Telegram
+      - name: Generate WireGuard config and send to Telegram
+        run: |
+          # Generate the WireGuard config (This could be done with a script you write in your project)
+          CONFIG=$(./gradlew generateWireGuardConfig)
+
+          # Send the configuration to the Telegram channel
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=$CONFIG"
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python - << EOF
-          import os
-          import json
-          import random
-          import urllib.parse
-          from telegram import Bot
-          from telegram.error import TelegramError
-
-          def generate_reserved():
-              """Generates a valid reserved field with three random numbers."""
-              return [random.randint(0, 255) for _ in range(3)]
-
-          def generate_wireguard_config():
-              reserved = generate_reserved()
-              config = {
-                  "local_address": [
-                      "172.16.0.2/32",
-                      "2606:4700:110:8a6d:21bd:c9c1:a8:747a/128"
-                  ],
-                  "mtu": 1280,
-                  "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-                  "private_key": "IKRBbz7Ug/QW7ueR7jy+6awYusXlXeIy4RQliP1k5ko=",
-                  "reserved": reserved,
-                  "server": "engage.cloudflareclient.com",
-                  "server_port": 2408
-              }
-
-              # Escape characters for JSON compatibility
-              config_json = json.dumps(config, indent=2, ensure_ascii=False).replace("=", r"\u003d")
-
-              # Encode URL components
-              private_key_encoded = urllib.parse.quote(config['private_key'])
-              local_address_encoded = urllib.parse.quote(','.join(config['local_address']))
-              reserved_encoded = ','.join(map(str, reserved))  # Keep as regular numbers
-              public_key_encoded = urllib.parse.quote(config['peer_public_key'])
-
-              # Construct URI
-              config_url = (
-                  f"wireguard://{private_key_encoded}"
-                  f"@{config['server']}:{config['server_port']}?"
-                  f"address={local_address_encoded}"
-                  f"&reserved={reserved_encoded}"
-                  f"&publickey={public_key_encoded}"
-                  f"&mtu={config['mtu']}#Warp"
-              )
-
-              return config_json, config_url
-
-          config_json, config_url = generate_wireguard_config()
-
-          bot = Bot(token=os.environ['TELEGRAM_BOT_TOKEN'])
-          try:
-              chat_id = os.environ['TELEGRAM_CHANNEL_ID']
-              
-              # Combine JSON config and URI into the exact required message format
-              message = f"{config_json}\n\n{config_url}"
-              bot.send_message(chat_id=chat_id, text=message)
-              
-              print("Message sent successfully to Telegram.")
-          except TelegramError as e:
-              print(f"An error occurred while sending the message: {e}")
-          EOF
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

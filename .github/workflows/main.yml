@@ -48,8 +48,3 @@ jobs:
           -F chat_id=${TELEGRAM_CHAT_ID} \
           -F document=@wireguard.conf \
           -F caption="$(cat wireguard.conf)"
-
-
-
-
-The private key that it makes are invalid and don't connect

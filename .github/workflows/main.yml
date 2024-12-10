@@ -31,6 +31,7 @@ jobs:
           # Parse the endpoints file and select one random endpoint
           python - <<EOF
           import random
+          import os
           
           with open('endpoints.txt', 'r') as file:
               lines = file.readlines()
@@ -40,7 +41,11 @@ jobs:
           
           if endpoints:
               selected_endpoint = random.choice(endpoints)
-              print(f"::set-output name=endpoint::{selected_endpoint}")
+              print(f"Selected endpoint: {selected_endpoint}")
+
+              # Write the selected endpoint to $GITHUB_OUTPUT
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as output_file:
+                  output_file.write(f"endpoint={selected_endpoint}\n")
 
               # Generate the WireGuard config
               with open('wg0.conf', 'w') as conf_file:

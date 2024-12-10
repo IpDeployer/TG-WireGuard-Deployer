@@ -1,66 +1,67 @@
-name: Generate WireGuard Config and Notify Telegram
+name: Generate WireGuard Config
 
 on:
   push:
     branches:
-      - main  # Trigger on push to the main branch
+      - main
   schedule:
-    - cron: "0 * * * *"  # Runs every hour
-  workflow_dispatch:  # Allows manual triggering
-
-env:
-  TELEGRAM_API_URL: https://api.telegram.org
+    - cron: '0 * * * *' # Run every hour
+  workflow_dispatch: # Manual trigger
 
 jobs:
-  wireguard-config:
+  generate-config:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-      - name: Download endpoints.md
-        run: |
-          curl -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
+    - name: Install WireGuard Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wireguard-tools
 
-      - name: Parse and Generate WireGuard Configuration
-        id: generate_config
-        run: |
-          # Extract lines containing valid IP:PORT from the Markdown file
-          ENDPOINTS=$(grep -Eo '[0-9a-fA-F:.]+:[0-9]+' endpoints.md)
-          if [ -z "$ENDPOINTS" ]; then
-            echo "No valid endpoints found in endpoints.md."
-            exit 1
-          fi
-          # Select a random endpoint
-          RANDOM_ENDPOINT=$(echo "$ENDPOINTS" | shuf -n 1)
-          echo "Selected Endpoint: $RANDOM_ENDPOINT"
-          echo "ENDPOINT=$RANDOM_ENDPOINT" >> $GITHUB_ENV
-          
-          # Generate a WireGuard configuration file
-          CONFIG_FILE="wg_config.conf"
-          cat > $CONFIG_FILE <<EOF
-[Interface]
-PrivateKey = <YourPrivateKey>
-Address = 10.0.0.2/24
-DNS = 1.1.1.1
+    - name: Clone WireGuard Key Generator
+      run: |
+        git clone https://github.com/ParamonPlay2205/wireguard-key-generator.git
+        cd wireguard-key-generator
+        sudo sh gen_keys.sh
+        mv privatekey private_key.txt
+        mv publickey public_key.txt
 
-[Peer]
-PublicKey = <PeerPublicKey>
-Endpoint = $RANDOM_ENDPOINT
-AllowedIPs = 0.0.0.0/0, ::/0
-PersistentKeepalive = 25
+    - name: Fetch Endpoint List
+      run: |
+        curl -s https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md -o endpoints.md
+
+    - name: Select Random Endpoint
+      id: select-endpoint
+      run: |
+        ENDPOINT=$(grep -Eo '.*:[0-9]+' endpoints.md | shuf -n 1)
+        echo "endpoint=${ENDPOINT}" >> $GITHUB_ENV
+
+    - name: Generate WireGuard Config
+      id: generate-config
+      run: |
+        PRIVATE_KEY=$(cat wireguard-key-generator/private_key.txt)
+        PUBLIC_KEY="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=" # Provided public key
+        DNS="8.8.8.8, 8.8.2.2"
+        ENDPOINT="${{ env.endpoint }}"
+        cat <<EOF > wireguard-client.conf
+        [Interface]
+        Address = 192.168.17.97/24
+        DNS = $DNS
+        PrivateKey = $PRIVATE_KEY
+
+        [Peer]
+        AllowedIPs = 0.0.0.0/0
+        Endpoint = $ENDPOINT
+        PublicKey = $PUBLIC_KEY
 EOF
-          echo "Generated WireGuard configuration:"
-          cat $CONFIG_FILE
 
-      - name: Send Configuration to Telegram
-        env:
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        run: |
-          # Use the Telegram Bot API to send the file
-          curl -F chat_id="$TELEGRAM_CHAT_ID" \
-               -F document=@"wg_config.conf" \
-               -F caption="$(cat wg_config.conf)" \
-               $TELEGRAM_API_URL/bot$TELEGRAM_TOKEN/sendDocument
+    - name: Send Config to Telegram
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        curl -F document=@wireguard-client.conf \
+             -F caption="[Interface]\nAddress = 192.168.17.97/24\nDNS = 8.8.8.8\nPrivateKey = (hidden for security)\n\n[Peer]\nAllowedIPs = 0.0.0.0/0\nEndpoint = ${{ env.endpoint }}\nPublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=" \
+             "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument?chat_id=${{ secrets.TELEGRAM_CHAT_ID }}"

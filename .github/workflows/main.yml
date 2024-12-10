@@ -1,71 +1,76 @@
-name: Generate WireGuard Config
+name: Generate WireGuard Config and Send
 
 on:
+  schedule:
+    - cron: "0 * * * *" # Runs every hour
   workflow_dispatch:
-    inputs:
-      raw_file_url:
-        description: "Raw file URL containing endpoints"
-        required: true
-        default: "https://raw.githubusercontent.com/your-repo/endpoints-file/main/endpoints.txt"
 
 jobs:
-  generate-config:
+  generate_and_send:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Set up environment
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Install WireGuard Tools
+      run: sudo apt update && sudo apt install -y wireguard-tools
+
+    - name: Download Endpoint List
       run: |
-        sudo apt update
-        sudo apt install -y wireguard-tools jq
-        git clone https://github.com/ParamonPlay2205/wireguard-key-generator.git
-        sudo sh wireguard-key-generator/gen_keys.sh
-        sudo chmod 777 -R wireguard-key-generator/
-
-    - name: Fetch endpoints
+        curl -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
+    
+    - name: Parse and Select Random Endpoint
+      id: select_endpoint
       run: |
-        curl -s "${{ github.event.inputs.raw_file_url }}" > endpoints.txt
-        endpoints=$(grep -oE '.*?:[0-9]+' endpoints.txt)
-        random_endpoint=$(echo "$endpoints" | shuf -n 1)
-        echo "::set-output name=endpoint::$random_endpoint"
-      id: endpoints
+        # Extract IP:PORT lines from the Markdown file
+        ENDPOINTS=$(grep -Eo '[^]]+:[0-9]+' endpoints.md | tr -d '[]')
+        # Select a random endpoint
+        RANDOM_ENDPOINT=$(echo "$ENDPOINTS" | shuf -n 1)
+        echo "Selected Endpoint: $RANDOM_ENDPOINT"
+        echo "ENDPOINT=$RANDOM_ENDPOINT" >> $GITHUB_ENV
 
-    - name: Generate WireGuard keys
+    - name: Generate WireGuard Keys
+      id: generate_keys
       run: |
-        client_private_key=$(cat wireguard-key-generator/privatekey)
-        client_public_key=$(cat wireguard-key-generator/publickey)
-        echo "::set-output name=client_private_key::$client_private_key"
-        echo "::set-output name=client_public_key::$client_public_key"
-      id: keys
+        git clone https://github.com/ParamonPlay2205/wireguard-key-generator/
+        cd wireguard-key-generator
+        sudo sh gen_keys.sh
+        CLIENT_PRIVATE_KEY=$(cat client_private.key)
+        SERVER_PUBLIC_KEY=bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+        echo "PRIVATE_KEY=$CLIENT_PRIVATE_KEY" >> $GITHUB_ENV
+        echo "PUBLIC_KEY=$SERVER_PUBLIC_KEY" >> $GITHUB_ENV
 
-    - name: Create WireGuard config
+    - name: Create WireGuard Config
+      id: create_config
       run: |
-        echo "[Interface]
-Address = 192.168.17.97/24
-DNS = 8.8.8.8, 8.8.2.2
-PrivateKey = ${{ steps.keys.outputs.client_private_key }}
+        cat <<EOF > client.conf
+        [Interface]
+        Address = 192.168.17.97/24
+        DNS = 8.8.8.8, 8.8.2.2
+        PrivateKey = ${{ env.PRIVATE_KEY }}
 
-[Peer]
-AllowedIPs = 0.0.0.0/0
-Endpoint = ${{ steps.endpoints.outputs.endpoint }}
-PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
-" > client.conf
-        echo "::set-output name=config_file::$(cat client.conf)"
-      id: config
+        [Peer]
+        AllowedIPs = 0.0.0.0/0
+        Endpoint = ${{ env.ENDPOINT }}
+        PublicKey = ${{ env.PUBLIC_KEY }}
+        EOF
+        echo "Configuration created successfully."
 
-    - name: Send configuration via Telegram
+    - name: Send Config to Telegram
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
-          -F chat_id="${TELEGRAM_CHAT_ID}" \
-          -F document=@"client.conf" \
-          -F caption="[Interface]
+        curl -F chat_id=$TELEGRAM_CHAT_ID \
+             -F document=@client.conf \
+             -F caption="[Interface]
 Address = 192.168.17.97/24
 DNS = 8.8.8.8
-PrivateKey = ${{ steps.keys.outputs.client_private_key }}
+PrivateKey = <hidden>
 
 [Peer]
 AllowedIPs = 0.0.0.0/0
-Endpoint = ${{ steps.endpoints.outputs.endpoint }}
-PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+Endpoint = ${{ env.ENDPOINT }}
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=" \
+             https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument

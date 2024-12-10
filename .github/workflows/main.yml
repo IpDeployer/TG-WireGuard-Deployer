@@ -1,69 +1,55 @@
-name: WireGuard Config Generator
+name: Generate and Send WireGuard Config
 
 on:
-  push:
-    branches:
-      - main
   schedule:
-    - cron: "0 * * * *" # Every hour
-  workflow_dispatch: # Manual trigger
+    - cron: "0 * * * *" # Run every hour
+  workflow_dispatch: # Allows manual trigger
 
 jobs:
-  generate-config:
+  generate-and-send:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Install WireGuard Tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wireguard-tools
+      - name: Install WireGuard Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wireguard-tools
 
-    - name: Clone Key Generator
-      run: git clone https://github.com/ParamonPlay2205/wireguard-key-generator.git
+      - name: Fetch Markdown File
+        run: curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
 
-    - name: Generate WireGuard Keys
-      run: |
-        cd wireguard-key-generator
-        sudo sh gen_keys.sh
-      working-directory: ./wireguard-key-generator
-      id: keys
-      outputs:
-        private_key: ${{ steps.keys.outputs.private_key }}
-        public_key: ${{ steps.keys.outputs.public_key }}
+      - name: Parse Endpoints and Generate Config
+        id: generate_config
+        run: |
+          # Extract the endpoint table and pick a random entry
+          ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
+          PRIVATE_KEY=$(wg genkey)
+          CONFIG="[Interface]
+          Address = 192.168.17.97/24
+          DNS = 8.8.8.8, 8.8.2.2
+          PrivateKey = $PRIVATE_KEY
 
-    - name: Fetch Endpoints
-      run: |
-        curl -sSL "https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md" > endpoints.md
-        grep -Eo '[0-9a-fA-F:]+:[0-9]+' endpoints.md > endpoints.txt
+          [Peer]
+          AllowedIPs = 0.0.0.0/0
+          Endpoint = ${ENDPOINT}
+          PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+          "
+          echo "$CONFIG" > wireguard.conf
+          echo "::set-output name=config::$CONFIG"
 
-    - name: Select Random Endpoint
-      id: endpoint
-      run: |
-        endpoint=$(shuf -n 1 endpoints.txt)
-        echo "::set-output name=endpoint::$endpoint"
+      - name: Send Config to Telegram
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument \
+          -F chat_id=${TELEGRAM_CHAT_ID} \
+          -F document=@wireguard.conf \
+          -F caption="$(cat wireguard.conf)"
 
-    - name: Create WireGuard Config
-      id: config
-      run: |
-        echo "[Interface]" > wg.conf
-        echo "Address = 192.168.17.97/24" >> wg.conf
-        echo "DNS = 8.8.8.8, 8.8.2.2" >> wg.conf
-        echo "PrivateKey = $(cat wireguard-key-generator/private_key)" >> wg.conf
-        echo "" >> wg.conf
-        echo "[Peer]" >> wg.conf
-        echo "AllowedIPs = 0.0.0.0/0" >> wg.conf
-        echo "Endpoint = ${{ steps.endpoint.outputs.endpoint }}" >> wg.conf
-        echo "PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=" >> wg.conf
 
-    - name: Send Config to Telegram
-      env:
-        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      run: |
-        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
-          -F chat_id="${TELEGRAM_CHAT_ID}" \
-          -F document="@wg.conf" \
-          -F caption="[Interface]\nAddress = 192.168.17.97/24\nDNS = 8.8.8.8, 8.8.2.2\nPrivateKey = ***\n\n[Peer]\nAllowedIPs = 0.0.0.0/0\nEndpoint = ${{ steps.endpoint.outputs.endpoint }}\nPublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+
+
+The private key that it makes are invalid and don't connect

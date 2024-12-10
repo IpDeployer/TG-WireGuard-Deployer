@@ -24,7 +24,7 @@ jobs:
       - name: Parse Endpoints and Generate Config
         id: generate_config
         run: |
-          # Extract endpoint, remove any extra spaces, and pick one randomly
+          # Extract endpoint, remove any extra spaces, and select one randomly
           ENDPOINT=$(awk '/\| [0-9a-f]/ {gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2}' endpoints.md | shuf -n 1)
           
           # Generate keys
@@ -40,7 +40,7 @@ PrivateKey = $PRIVATE_KEY
 
 [Peer]
 AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = ${ENDPOINT}
+Endpoint = $ENDPOINT
 PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
 PersistentKeepalive = 25
 EOF
@@ -53,5 +53,5 @@ EOF
         run: |
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
           -F chat_id=${TELEGRAM_CHAT_ID} \
-          -F document=@wireguard.conf \
+          -F document=@./wireguard.conf \
           -F caption="Generated WireGuard Config:\n$(cat wireguard.conf)"

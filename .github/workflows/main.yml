@@ -12,6 +12,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      - name: Install WireGuard Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wireguard-tools
+
       - name: Fetch Markdown File
         run: curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
 

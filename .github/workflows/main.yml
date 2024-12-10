@@ -1,52 +1,71 @@
-name: Generate and Send WireGuard Config
+name: Generate WireGuard Config
 
 on:
-  schedule:
-    - cron: "0 * * * *" # Run every hour
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
+    inputs:
+      raw_file_url:
+        description: "Raw file URL containing endpoints"
+        required: true
+        default: "https://raw.githubusercontent.com/your-repo/endpoints-file/main/endpoints.txt"
 
 jobs:
-  generate-and-send:
+  generate-config:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+    - name: Set up environment
+      run: |
+        sudo apt update
+        sudo apt install -y wireguard-tools jq
+        git clone https://github.com/ParamonPlay2205/wireguard-key-generator.git
+        sudo sh wireguard-key-generator/gen_keys.sh
+        sudo chmod 777 -R wireguard-key-generator/
 
-      - name: Install WireGuard Tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wireguard-tools
+    - name: Fetch endpoints
+      run: |
+        curl -s "${{ github.event.inputs.raw_file_url }}" > endpoints.txt
+        endpoints=$(grep -oE '.*?:[0-9]+' endpoints.txt)
+        random_endpoint=$(echo "$endpoints" | shuf -n 1)
+        echo "::set-output name=endpoint::$random_endpoint"
+      id: endpoints
 
-      - name: Fetch Markdown File
-        run: curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
+    - name: Generate WireGuard keys
+      run: |
+        client_private_key=$(cat wireguard-key-generator/privatekey)
+        client_public_key=$(cat wireguard-key-generator/publickey)
+        echo "::set-output name=client_private_key::$client_private_key"
+        echo "::set-output name=client_public_key::$client_public_key"
+      id: keys
 
-      - name: Parse Endpoints and Generate Config
-        id: generate_config
-        run: |
-          # Extract the endpoint table and pick a random entry
-          ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
-          # Generate keys
-          PRIVATE_KEY=$(wg genkey)
-          PUBLIC_KEY=$(echo "$PRIVATE_KEY" | wg pubkey)
-          CONFIG="[Interface]
-          Address = 192.168.17.97/24
-          DNS = 8.8.8.8, 8.8.2.2
-          PrivateKey = $PRIVATE_KEY
+    - name: Create WireGuard config
+      run: |
+        echo "[Interface]
+Address = 192.168.17.97/24
+DNS = 8.8.8.8, 8.8.2.2
+PrivateKey = ${{ steps.keys.outputs.client_private_key }}
 
-          [Peer]
-          AllowedIPs = 0.0.0.0/0
-          Endpoint = ${ENDPOINT}
-          PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
-          "
-          echo "$CONFIG" > wireguard.conf
-          echo "::set-output name=config::$CONFIG"
+[Peer]
+AllowedIPs = 0.0.0.0/0
+Endpoint = ${{ steps.endpoints.outputs.endpoint }}
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+" > client.conf
+        echo "::set-output name=config_file::$(cat client.conf)"
+      id: config
 
-      - name: Send Config to Telegram
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument \
-          -F chat_id=${TELEGRAM_CHAT_ID} \
-          -F document=@wireguard.conf \
-          -F caption="$(cat wireguard.conf)"
+    - name: Send configuration via Telegram
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
+          -F chat_id="${TELEGRAM_CHAT_ID}" \
+          -F document=@"client.conf" \
+          -F caption="[Interface]
+Address = 192.168.17.97/24
+DNS = 8.8.8.8
+PrivateKey = ${{ steps.keys.outputs.client_private_key }}
+
+[Peer]
+AllowedIPs = 0.0.0.0/0
+Endpoint = ${{ steps.endpoints.outputs.endpoint }}
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="

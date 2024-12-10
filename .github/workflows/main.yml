@@ -24,33 +24,34 @@ jobs:
       - name: Parse Endpoints and Generate Config
         id: generate_config
         run: |
-          # Extract the endpoint table and pick a random entry
-          ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
+          # Extract endpoint, remove any extra spaces, and pick one randomly
+          ENDPOINT=$(awk '/\| [0-9a-f]/ {gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2}' endpoints.md | shuf -n 1)
           
-          # Generate private and public keys
+          # Generate keys
           PRIVATE_KEY=$(wg genkey)
-          PUBLIC_KEY=$(echo $PRIVATE_KEY | wg pubkey)
+          PUBLIC_KEY=$(echo "$PRIVATE_KEY" | wg pubkey)
 
           # Create WireGuard configuration
-          CONFIG="[Interface]
-          Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
-          DNS = 8.8.8.8, 8.8.2.2
-          PrivateKey = $PRIVATE_KEY
+          cat << EOF > wireguard.conf
+[Interface]
+Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
+DNS = 8.8.8.8, 8.8.4.4
+PrivateKey = $PRIVATE_KEY
 
-          [Peer]
-          AllowedIPs = 0.0.0.0/0, ::/0
-          Endpoint = ${ENDPOINT}
-          PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
-          "
-          echo "$CONFIG" > wireguard.conf
-          echo "::set-output name=config::$CONFIG"
+[Peer]
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = ${ENDPOINT}
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+PersistentKeepalive = 25
+EOF
+          echo "::set-output name=config::$(cat wireguard.conf)"
 
       - name: Send Config to Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument \
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
           -F chat_id=${TELEGRAM_CHAT_ID} \
           -F document=@wireguard.conf \
-          -F caption="$(cat wireguard.conf)"
+          -F caption="Generated WireGuard Config:\n$(cat wireguard.conf)"

@@ -15,7 +15,7 @@ jobs:
       - name: Install WireGuard Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y wireguard
+          sudo apt-get install -y wireguard-tools curl
 
       - name: Fetch Markdown File
         run: |
@@ -24,10 +24,15 @@ jobs:
       - name: Parse Endpoints and Generate Config
         id: generate_config
         run: |
-          # Extract endpoint, remove any extra spaces, and select one randomly
-          ENDPOINT=$(awk '/\| [0-9a-f]/ {gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2}' endpoints.md | shuf -n 1)
+          # Extract a random endpoint from the Markdown file
+          ENDPOINT=$(awk -F'|' '/[a-f0-9:]/ {gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3}' endpoints.md | shuf -n 1)
           
-          # Generate keys
+          if [ -z "$ENDPOINT" ]; then
+            echo "Error: No valid endpoint found in endpoints.md"
+            exit 1
+          fi
+
+          # Generate WireGuard keys
           PRIVATE_KEY=$(wg genkey)
           PUBLIC_KEY=$(echo "$PRIVATE_KEY" | wg pubkey)
 
@@ -44,14 +49,16 @@ Endpoint = $ENDPOINT
 PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
 PersistentKeepalive = 25
 EOF
-          echo "Config generated successfully."
-      
+
+      - name: Display Generated Config
+        run: cat wireguard.conf
+
       - name: Send Config to Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
-          -F chat_id=${TELEGRAM_CHAT_ID} \
+          -F chat_id="${TELEGRAM_CHAT_ID}" \
           -F document=@wireguard.conf \
-          -F caption="Generated WireGuard Config:"
+          -F caption="Here is the generated WireGuard configuration."

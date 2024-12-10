@@ -24,19 +24,22 @@ jobs:
       - name: Parse Endpoints and Generate Config
         id: generate_config
         run: |
-          # Extract a random endpoint from the Markdown file
+          # Parse the third column (endpoint) from the markdown file and pick one randomly
           ENDPOINT=$(awk -F'|' '/[a-f0-9:]/ {gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3}' endpoints.md | shuf -n 1)
-          
+
+          # Verify if a valid endpoint was extracted
           if [ -z "$ENDPOINT" ]; then
-            echo "Error: No valid endpoint found in endpoints.md"
+            echo "Error: No valid endpoint found in the Markdown file."
             exit 1
           fi
+
+          echo "Selected Endpoint: $ENDPOINT"
 
           # Generate WireGuard keys
           PRIVATE_KEY=$(wg genkey)
           PUBLIC_KEY=$(echo "$PRIVATE_KEY" | wg pubkey)
 
-          # Create WireGuard configuration
+          # Generate WireGuard configuration
           cat << EOF > wireguard.conf
 [Interface]
 Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
@@ -58,7 +61,8 @@ EOF
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          # Send the configuration file to Telegram
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
           -F chat_id="${TELEGRAM_CHAT_ID}" \
           -F document=@wireguard.conf \
-          -F caption="Here is the generated WireGuard configuration."
+          -F caption="Generated WireGuard Configuration"

@@ -1,33 +1,56 @@
-name: Generate and Send WireGuard Config
+name: WireGuard Config Generator
 
 on:
-  schedule:
-    - cron: "0 * * * *" # Run every hour
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch: # Allows manual triggering of the workflow
+  push:              # Run on every push
+    branches:
+      - main
 
 jobs:
-  generate-and-send:
+  generate-config:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Install WireGuard Tools
+      - name: Install Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wireguard-tools
+          sudo apt update
+          sudo apt install -y wireguard-tools
 
-      - name: Fetch Markdown File
-        run: curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
-
-      - name: Parse Endpoints and Generate Config
-        id: generate_config
+      - name: Generate WireGuard Configuration
         run: |
-          # Extract the endpoint table and pick a random entry
+          # Validate if wg is installed
+          if ! command -v wg &> /dev/null; then
+              echo "Error: WireGuard tools are not installed."
+              exit 1
+          fi
+
+          # Extract a random endpoint
+          if [[ ! -f endpoints.md ]]; then
+              echo "Error: endpoints.md file not found."
+              exit 1
+          fi
+
           ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
+          if [[ -z "$ENDPOINT" ]]; then
+              echo "Error: No valid endpoint found in endpoints.md."
+              exit 1
+          fi
+
+          # Generate private and public keys
           PRIVATE_KEY=$(wg genkey)
+          if [[ -z "$PRIVATE_KEY" ]]; then
+              echo "Error: Failed to generate private key."
+              exit 1
+          fi
+
+          PUBLIC_KEY=$(echo "$PRIVATE_KEY" | wg pubkey)
+
+          # Define configuration
           CONFIG="[Interface]
-          Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
+          Address = 192.168.17.97/24
           DNS = 8.8.8.8, 8.8.2.2
           PrivateKey = $PRIVATE_KEY
 
@@ -36,15 +59,19 @@ jobs:
           Endpoint = ${ENDPOINT}
           PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
           "
+
+          # Save configuration to a file
           echo "$CONFIG" > wireguard.conf
           echo "::set-output name=config::$CONFIG"
 
-      - name: Send Config to Telegram
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument \
-          -F chat_id=${TELEGRAM_CHAT_ID} \
-          -F document=@wireguard.conf \
-          -F caption="$(cat wireguard.conf)"
+          # Debug: Output keys and endpoint
+          echo "Generated Configuration:"
+          echo "$CONFIG"
+          echo "Endpoint: $ENDPOINT"
+          echo "Public Key: $PUBLIC_KEY"
+
+      - name: Upload Configuration File
+        uses: actions/upload-artifact@v3
+        with:
+          name: wireguard-config
+          path: wireguard.conf

@@ -1,4 +1,4 @@
-name: Generate WireGuard Config and Send
+name: Generate WireGuard Config and Send to Telegram
 
 on:
   schedule:
@@ -10,67 +10,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout Repository
       uses: actions/checkout@v3
 
-    - name: Install WireGuard Tools
+    - name: Install Dependencies
       run: sudo apt update && sudo apt install -y wireguard-tools
 
     - name: Download Endpoint List
       run: |
-        curl -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
-    
+        curl -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
+
     - name: Parse and Select Random Endpoint
       id: select_endpoint
       run: |
-        # Extract IP:PORT lines from the Markdown file
-        ENDPOINTS=$(grep -Eo '[^]]+:[0-9]+' endpoints.md | tr -d '[]')
+        # Extract lines containing IP:PORT from the Markdown file
+        ENDPOINTS=$(grep -Eo '[0-9a-fA-F:]+\.[0-9]+$' endpoints.md)
         # Select a random endpoint
         RANDOM_ENDPOINT=$(echo "$ENDPOINTS" | shuf -n 1)
-        echo "Selected Endpoint: $RANDOM_ENDPOINT"
         echo "ENDPOINT=$RANDOM_ENDPOINT" >> $GITHUB_ENV
+      shell: bash
 
     - name: Generate WireGuard Keys
       id: generate_keys
       run: |
-        git clone https://github.com/ParamonPlay2205/wireguard-key-generator/
-        cd wireguard-key-generator
-        sudo sh gen_keys.sh
-        CLIENT_PRIVATE_KEY=$(cat client_private.key)
-        SERVER_PUBLIC_KEY=bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+        # Generate private and public keys
+        wg genkey | tee privatekey | wg pubkey > publickey
+        CLIENT_PRIVATE_KEY=$(cat privatekey)
+        SERVER_PUBLIC_KEY="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=" # Replace with actual server public key
         echo "PRIVATE_KEY=$CLIENT_PRIVATE_KEY" >> $GITHUB_ENV
-        echo "PUBLIC_KEY=$SERVER_PUBLIC_KEY" >> $GITHUB_ENV
+        echo "SERVER_PUBLIC_KEY=$SERVER_PUBLIC_KEY" >> $GITHUB_ENV
 
-    - name: Create WireGuard Config
-      id: create_config
+    - name: Create WireGuard Configuration
       run: |
         cat <<EOF > client.conf
         [Interface]
         Address = 192.168.17.97/24
-        DNS = 8.8.8.8, 8.8.2.2
+        DNS = 8.8.8.8, 8.8.4.4
         PrivateKey = ${{ env.PRIVATE_KEY }}
 
         [Peer]
         AllowedIPs = 0.0.0.0/0
         Endpoint = ${{ env.ENDPOINT }}
-        PublicKey = ${{ env.PUBLIC_KEY }}
+        PublicKey = ${{ env.SERVER_PUBLIC_KEY }}
         EOF
-        echo "Configuration created successfully."
+        echo "WireGuard configuration generated."
 
-    - name: Send Config to Telegram
+    - name: Send WireGuard Config to Telegram
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
         curl -F chat_id=$TELEGRAM_CHAT_ID \
              -F document=@client.conf \
-             -F caption="[Interface]
-Address = 192.168.17.97/24
-DNS = 8.8.8.8
-PrivateKey = <hidden>
-
-[Peer]
-AllowedIPs = 0.0.0.0/0
-Endpoint = ${{ env.ENDPOINT }}
-PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=" \
+             -F caption="WireGuard Configuration with Endpoint: ${{ env.ENDPOINT }}" \
              https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument

@@ -15,11 +15,11 @@ jobs:
       - name: Install WireGuard Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y wireguard-tools
+          sudo apt-get install -y wireguard
 
       - name: Fetch Markdown File
         run: |
-          curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
+          curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
 
       - name: Parse Endpoints and Generate Config
         id: generate_config
@@ -44,8 +44,8 @@ Endpoint = $ENDPOINT
 PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
 PersistentKeepalive = 25
 EOF
-          echo "::set-output name=config::$(cat wireguard.conf)"
-
+          echo "Config generated successfully."
+      
       - name: Send Config to Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -53,5 +53,5 @@ EOF
         run: |
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
           -F chat_id=${TELEGRAM_CHAT_ID} \
-          -F document=@./wireguard.conf \
-          -F caption="Generated WireGuard Config:\n$(cat wireguard.conf)"
+          -F document=@wireguard.conf \
+          -F caption="Generated WireGuard Config:"

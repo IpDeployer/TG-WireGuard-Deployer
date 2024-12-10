@@ -2,8 +2,6 @@ import os
 import subprocess
 from telegram import Bot
 from telegram.error import TelegramError
-import time
-import random
 
 # Load secrets from environment variables
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -31,24 +29,14 @@ PersistentKeepalive = 25
 def send_config_to_telegram(bot, config):
     try:
         bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=config.encode(), filename="wg_config.conf")
+        print("WireGuard config sent successfully.")
     except TelegramError as e:
         print(f"An error occurred: {e}")
 
 def main():
     bot = Bot(token=TELEGRAM_TOKEN)
-    
-    # Manual sending
-    if os.environ.get('MANUAL_SEND', 'false').lower() == 'true':
-        config = generate_wireguard_config()
-        print("Sending WireGuard config manually.")
-        send_config_to_telegram(bot, config)
-    
-    # Automatic sending every 10 minutes
-    while True:
-        config = generate_wireguard_config()
-        print("Sending WireGuard config automatically.")
-        send_config_to_telegram(bot, config)
-        time.sleep(600)  # 10 minutes in seconds
+    config = generate_wireguard_config()
+    send_config_to_telegram(bot, config)
 
 if __name__ == "__main__":
     main()

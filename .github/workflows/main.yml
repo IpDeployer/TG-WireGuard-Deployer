@@ -1,3 +1,5 @@
+So 
+
 name: Generate and Send WireGuard Config
 
 on:
@@ -17,42 +19,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wireguard-tools
 
-      - name: Fetch Endpoint File
+      - name: Fetch Markdown File
         run: |
           curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
 
-      - name: Parse Endpoints and Generate Keys
-        id: generate_keys
+      - name: Parse Endpoints and Generate Config
+        id: generate_config
         run: |
-          # Extract a random endpoint from the markdown file
+          # Extract the endpoint table and pick a random entry
           ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
           
           # Generate private and public keys
           PRIVATE_KEY=$(wg genkey)
-          PUBLIC_KEY=$(echo "$PRIVATE_KEY" | wg pubkey)
+          PUBLIC_KEY=$(echo $PRIVATE_KEY | wg pubkey)
 
-          # Output keys and endpoint for further steps
-          echo "::set-output name=private_key::$PRIVATE_KEY"
-          echo "::set-output name=public_key::$PUBLIC_KEY"
-          echo "::set-output name=endpoint::$ENDPOINT"
-
-      - name: Create WireGuard Configuration
-        id: create_config
-        run: |
-          # Prepare configuration file
-          cat <<EOF > wireguard.conf
-          [Interface]
+          # Create WireGuard configuration
+          CONFIG="[Interface]
           Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
           DNS = 8.8.8.8, 8.8.2.2
-          PrivateKey = ${{ steps.generate_keys.outputs.private_key }}
+          PrivateKey = $PRIVATE_KEY
 
           [Peer]
           AllowedIPs = 0.0.0.0/0, ::/0
-          Endpoint = ${{ steps.generate_keys.outputs.endpoint }}
+          Endpoint = ${ENDPOINT}
           PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
-          EOF
+          "
+          echo "$CONFIG" > wireguard.conf
+          echo "::set-output name=config::$CONFIG"
 
-      - name: Send Configuration to Telegram
+      - name: Send Config to Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -61,3 +56,6 @@ jobs:
           -F chat_id=${TELEGRAM_CHAT_ID} \
           -F document=@wireguard.conf \
           -F caption="$(cat wireguard.conf)"
+
+
+Make my this code gemerate private key with the last code that you provided that pages private keys 

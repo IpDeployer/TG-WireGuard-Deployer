@@ -1,36 +1,97 @@
-name: WireGuard Config Sender
+name: Generate WireGuard Config and Send via Telegram
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # Runs every 10 minutes
-  workflow_dispatch:  # Allows for manual triggering
+    - cron: '0 0 * * *'  # Runs at midnight every day
+  workflow_dispatch:
 
 jobs:
-  send-config:
+  generate-and-send:
     runs-on: ubuntu-latest
-    timeout-minutes: 5  # Allows sufficient time for execution
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.9'
 
-      - name: Install WireGuard tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wireguard
-
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install python-telegram-bot
+          pip install requests
 
-      - name: Run script
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Generate WireGuard Config
         run: |
-          python main.py
+          # Fetch the raw file containing endpoints
+          curl -s "${{ secrets.ENDPOINTS_URL }}" > endpoints.txt
+
+          # Parse the endpoints file and select two unique random ones
+          python - <<EOF
+          import random
+          
+          with open('endpoints.txt', 'r') as file:
+              lines = file.readlines()
+          
+          # Skipping the header
+          endpoints = [line.split('|')[0].strip() for line in lines[1:] if line.strip()]
+          
+          if len(endpoints) >= 2:
+              # Select two unique endpoints
+              selected_endpoints = random.sample(endpoints, 2)
+              print(f"Selected endpoints: {selected_endpoints}")
+
+              # Generate the WireGuard config for each endpoint
+              for i, endpoint in enumerate(selected_endpoints, 1):
+                  with open(f'wg0_{i}.conf', 'w') as conf_file:
+                      conf_file.write(f"""[Interface]
+Address = 192.168.17.{97+i}/24
+DNS = 8.8.8.8,8.8.2.2
+PrivateKey = KDx7TXeCI2xGyyrS03pQTXtlFejbIcgvODPtAa3AElw=
+
+[Peer]
+AllowedIPs = 0.0.0.0/0
+Endpoint = {endpoint}
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1+SUtzH0JuVo51h2wPfgyo=
+""")
+          else:
+              print("Not enough endpoints found in the file!")
+          EOF
+
+      - name: Send Configs via Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          documents: |
+            wg0_1.conf
+            wg0_2.conf
+          caption: |
+            Here are two WireGuard configurations with unique endpoints:
+            
+            **Config 1:**
+            ```
+            [Interface]
+            Address = 192.168.17.98/24
+            DNS = 8.8.8.8
+            PrivateKey = KDx7TXeCI2xGyyrS03pQTXtlFejbIcgvODPtAa3AElw=
+
+            [Peer]
+            AllowedIPs = 0.0.0.0/0
+            Endpoint = ${{ steps.generate-and-send.outputs.endpoint1 }}
+            PublicKey = bmXOC+F1FxEMF9dyiK2H5/1+SUtzH0JuVo51h2wPfgyo=
+            ```
+            
+            **Config 2:**
+            ```
+            [Interface]
+            Address = 192.168.17.99/24
+            DNS = 8.8.8.8
+            PrivateKey = KDx7TXeCI2xGyyrS03pQTXtlFejbIcgvODPtAa3AElw=
+
+            [Peer]
+            AllowedIPs = 0.0.0.0/0
+            Endpoint = ${{ steps.generate-and-send.outputs.endpoint2 }}
+            PublicKey = bmXOC+F1FxEMF9dyiK2H5/1+SUtzH0JuVo51h2wPfgyo=
+            ```

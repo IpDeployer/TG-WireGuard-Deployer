@@ -9,37 +9,29 @@ jobs:
   generate-and-send:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Install WireGuard Tools
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wireguard-tools curl
+          sudo apt-get install -y wireguard-tools
 
-      - name: Fetch Markdown File
+      - name: Fetch Endpoints File
         run: |
-          curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
+          curl -sSL -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
 
-      - name: Parse Endpoints and Generate Config
+      - name: Generate WireGuard Config
         id: generate_config
         run: |
-          # Parse the third column (endpoint) from the markdown file and pick one randomly
-          ENDPOINT=$(awk -F'|' '/[a-f0-9:]/ {gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3}' endpoints.md | shuf -n 1)
+          # Extract endpoint and pick one randomly
+          ENDPOINT=$(awk '/\| [0-9a-f]/ {gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2}' endpoints.md | shuf -n 1)
 
-          # Verify if a valid endpoint was extracted
-          if [ -z "$ENDPOINT" ]; then
-            echo "Error: No valid endpoint found in the Markdown file."
-            exit 1
-          fi
-
-          echo "Selected Endpoint: $ENDPOINT"
-
-          # Generate WireGuard keys
+          # Generate keys
           PRIVATE_KEY=$(wg genkey)
           PUBLIC_KEY=$(echo "$PRIVATE_KEY" | wg pubkey)
 
-          # Generate WireGuard configuration
+          # Create WireGuard configuration file
           cat << EOF > wireguard.conf
 [Interface]
 Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
@@ -53,16 +45,17 @@ PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
 PersistentKeepalive = 25
 EOF
 
-      - name: Display Generated Config
-        run: cat wireguard.conf
+          # Log for debugging (omit sensitive data)
+          echo "Generated WireGuard configuration."
+        env:
+          CONFIG_PATH: wireguard.conf
 
-      - name: Send Config to Telegram
+      - name: Send WireGuard Config via Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # Send the configuration file to Telegram
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
-          -F chat_id="${TELEGRAM_CHAT_ID}" \
-          -F document=@wireguard.conf \
-          -F caption="Generated WireGuard Configuration"
+          -F chat_id=${TELEGRAM_CHAT_ID} \
+          -F document=@${CONFIG_PATH} \
+          -F caption="Generated WireGuard Config"

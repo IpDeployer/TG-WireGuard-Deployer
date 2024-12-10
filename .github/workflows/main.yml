@@ -23,6 +23,7 @@ jobs:
           pip install requests
 
       - name: Generate WireGuard Config
+        id: generate_config  # Add an ID to reference this step
         run: |
           # Fetch the raw file containing endpoints
           curl -s "${{ secrets.ENDPOINTS_URL }}" > endpoints.txt
@@ -39,7 +40,7 @@ jobs:
           
           if endpoints:
               selected_endpoint = random.choice(endpoints)
-              print(f"Selected endpoint: {selected_endpoint}")
+              print(f"::set-output name=endpoint::{selected_endpoint}")
 
               # Generate the WireGuard config
               with open('wg0.conf', 'w') as conf_file:
@@ -74,6 +75,6 @@ PublicKey = bmXOC+F1FxEMF9dyiK2H5/1+SUtzH0JuVo51h2wPfgyo=
 
             [Peer]
             AllowedIPs = 0.0.0.0/0
-            Endpoint = ${{ steps.generate-and-send.outputs.endpoint }}
+            Endpoint = ${{ steps.generate_config.outputs.endpoint }}
             PublicKey = bmXOC+F1FxEMF9dyiK2H5/1+SUtzH0JuVo51h2wPfgyo=
             ```

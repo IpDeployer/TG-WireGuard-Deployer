@@ -1,8 +1,8 @@
-name: Generate WireGuard Config and Send via Telegram
+name: Generate WireGuard Config and Send via Telegram Hourly
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Runs at midnight every day
+    - cron: '0 * * * *'  # Runs every hour at minute 0
   workflow_dispatch:
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
           # Fetch the raw file containing endpoints
           curl -s "${{ secrets.ENDPOINTS_URL }}" > endpoints.txt
 
-          # Parse the endpoints file and select two unique random ones
+          # Parse the endpoints file and select one random endpoint
           python - <<EOF
           import random
           
@@ -37,61 +37,43 @@ jobs:
           # Skipping the header
           endpoints = [line.split('|')[0].strip() for line in lines[1:] if line.strip()]
           
-          if len(endpoints) >= 2:
-              # Select two unique endpoints
-              selected_endpoints = random.sample(endpoints, 2)
-              print(f"Selected endpoints: {selected_endpoints}")
+          if endpoints:
+              selected_endpoint = random.choice(endpoints)
+              print(f"Selected endpoint: {selected_endpoint}")
 
-              # Generate the WireGuard config for each endpoint
-              for i, endpoint in enumerate(selected_endpoints, 1):
-                  with open(f'wg0_{i}.conf', 'w') as conf_file:
-                      conf_file.write(f"""[Interface]
-Address = 192.168.17.{97+i}/24
+              # Generate the WireGuard config
+              with open('wg0.conf', 'w') as conf_file:
+                  conf_file.write(f"""[Interface]
+Address = 192.168.17.97/24
 DNS = 8.8.8.8,8.8.2.2
 PrivateKey = KDx7TXeCI2xGyyrS03pQTXtlFejbIcgvODPtAa3AElw=
 
 [Peer]
 AllowedIPs = 0.0.0.0/0
-Endpoint = {endpoint}
+Endpoint = {selected_endpoint}
 PublicKey = bmXOC+F1FxEMF9dyiK2H5/1+SUtzH0JuVo51h2wPfgyo=
 """)
           else:
-              print("Not enough endpoints found in the file!")
+              print("No endpoints found in the file!")
           EOF
 
-      - name: Send Configs via Telegram
+      - name: Send Config via Telegram
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
-          documents: |
-            wg0_1.conf
-            wg0_2.conf
+          document: wg0.conf
           caption: |
-            Here are two WireGuard configurations with unique endpoints:
-            
-            **Config 1:**
+            Here is your hourly WireGuard configuration:
+
             ```
             [Interface]
-            Address = 192.168.17.98/24
+            Address = 192.168.17.97/24
             DNS = 8.8.8.8
             PrivateKey = KDx7TXeCI2xGyyrS03pQTXtlFejbIcgvODPtAa3AElw=
 
             [Peer]
             AllowedIPs = 0.0.0.0/0
-            Endpoint = ${{ steps.generate-and-send.outputs.endpoint1 }}
-            PublicKey = bmXOC+F1FxEMF9dyiK2H5/1+SUtzH0JuVo51h2wPfgyo=
-            ```
-            
-            **Config 2:**
-            ```
-            [Interface]
-            Address = 192.168.17.99/24
-            DNS = 8.8.8.8
-            PrivateKey = KDx7TXeCI2xGyyrS03pQTXtlFejbIcgvODPtAa3AElw=
-
-            [Peer]
-            AllowedIPs = 0.0.0.0/0
-            Endpoint = ${{ steps.generate-and-send.outputs.endpoint2 }}
+            Endpoint = ${{ steps.generate-and-send.outputs.endpoint }}
             PublicKey = bmXOC+F1FxEMF9dyiK2H5/1+SUtzH0JuVo51h2wPfgyo=
             ```

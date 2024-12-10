@@ -3,7 +3,6 @@ import subprocess
 from telegram import Bot, InputFile
 from telegram.error import TelegramError
 import logging
-import time
 
 # Setup logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -22,8 +21,8 @@ def generate_wireguard_config():
     """
     try:
         private_key = subprocess.check_output(['wg', 'genkey']).decode().strip()
-        public_key = subprocess.check_output(['echo', private_key, '|', 'wg', 'pubkey'], shell=True).decode().strip()
-        
+        public_key = subprocess.check_output(['wg', 'pubkey'], input=private_key.encode()).decode().strip()
+
         config = f"""[Interface]
 PrivateKey = {private_key}
 Address = 10.0.0.2/24
@@ -51,14 +50,18 @@ def send_config_to_telegram(bot, config):
     if config:
         try:
             # Create a temporary file to send as a document
-            with open('wg_config.conf', 'w') as f:
+            temp_file_path = 'wg_config.conf'
+            with open(temp_file_path, 'w') as f:
                 f.write(config)
-            
-            with open('wg_config.conf', 'rb') as f:
-                bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=InputFile(f, 'wg_config.conf'))
+
+            with open(temp_file_path, 'rb') as f:
+                bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=InputFile(f, temp_file_path))
             logger.info("WireGuard config sent successfully.")
         except TelegramError as e:
             logger.error(f"Error sending WireGuard config: {e}")
+        finally:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)  # Clean up the temporary file
     else:
         logger.error("No WireGuard config to send.")
 
@@ -66,11 +69,15 @@ def main():
     """
     Main function to initialize the bot and send the configuration.
     """
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        logger.error("Missing TELEGRAM_TOKEN or TELEGRAM_CHAT_ID environment variables.")
+        return
+
     bot = Bot(token=TELEGRAM_TOKEN)
-    
+
     # Generate WireGuard config
     config = generate_wireguard_config()
-    
+
     # Send the config to Telegram
     send_config_to_telegram(bot, config)
 

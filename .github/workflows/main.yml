@@ -12,15 +12,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Install WireGuard Tools
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wireguard-tools git
+          sudo apt-get install -y wireguard-tools git dos2unix
 
       - name: Clone WireGuard Key Generator
         run: |
           git clone https://github.com/ParamonPlay2205/wireguard-key-generator.git
           cd wireguard-key-generator
+          dos2unix gen_keys.sh # Normalize line endings
           chmod +x gen_keys.sh
 
       - name: Fetch Markdown File

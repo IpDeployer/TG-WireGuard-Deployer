@@ -17,10 +17,15 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
+      - name: Install WireGuard tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wireguard
+
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install python-telegram-bot wireguard-tools
+          pip install python-telegram-bot
 
       - name: Run script
         env:

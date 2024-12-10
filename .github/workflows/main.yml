@@ -23,7 +23,7 @@ jobs:
           pip install requests
 
       - name: Generate WireGuard Config
-        id: generate_config  # Add an ID to reference this step
+        id: generate_config  # Assigning an ID to reference this step
         run: |
           # Fetch the raw file containing endpoints
           curl -s "${{ secrets.ENDPOINTS_URL }}" > endpoints.txt
@@ -43,7 +43,7 @@ jobs:
               selected_endpoint = random.choice(endpoints)
               print(f"Selected endpoint: {selected_endpoint}")
 
-              # Write the selected endpoint to $GITHUB_OUTPUT
+              # Write the selected endpoint to the output
               with open(os.environ['GITHUB_OUTPUT'], 'a') as output_file:
                   output_file.write(f"endpoint={selected_endpoint}\n")
 

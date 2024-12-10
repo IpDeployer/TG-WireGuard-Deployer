@@ -25,7 +25,9 @@ jobs:
         run: |
           # Extract the endpoint table and pick a random entry
           ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
+          # Generate keys
           PRIVATE_KEY=$(wg genkey)
+          PUBLIC_KEY=$(echo "$PRIVATE_KEY" | wg pubkey)
           CONFIG="[Interface]
           Address = 192.168.17.97/24
           DNS = 8.8.8.8, 8.8.2.2

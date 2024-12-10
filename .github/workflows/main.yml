@@ -1,18 +1,19 @@
-name: Generate WireGuard Config
+name: WireGuard Config Generator
 
 on:
   push:
     branches:
       - main
   schedule:
-    - cron: '0 * * * *' # Run every hour
+    - cron: "0 * * * *" # Every hour
   workflow_dispatch: # Manual trigger
 
 jobs:
   generate-config:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout Repository
+    - name: Checkout Code
       uses: actions/checkout@v3
 
     - name: Install WireGuard Tools
@@ -20,48 +21,49 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y wireguard-tools
 
-    - name: Clone WireGuard Key Generator
+    - name: Clone Key Generator
+      run: git clone https://github.com/ParamonPlay2205/wireguard-key-generator.git
+
+    - name: Generate WireGuard Keys
       run: |
-        git clone https://github.com/ParamonPlay2205/wireguard-key-generator.git
         cd wireguard-key-generator
         sudo sh gen_keys.sh
-        mv privatekey private_key.txt
-        mv publickey public_key.txt
+      working-directory: ./wireguard-key-generator
+      id: keys
+      outputs:
+        private_key: ${{ steps.keys.outputs.private_key }}
+        public_key: ${{ steps.keys.outputs.public_key }}
 
-    - name: Fetch Endpoint List
+    - name: Fetch Endpoints
       run: |
-        curl -s https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md -o endpoints.md
+        curl -sSL "https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md" > endpoints.md
+        grep -Eo '[0-9a-fA-F:]+:[0-9]+' endpoints.md > endpoints.txt
 
     - name: Select Random Endpoint
-      id: select-endpoint
+      id: endpoint
       run: |
-        ENDPOINT=$(grep -Eo '.*:[0-9]+' endpoints.md | shuf -n 1)
-        echo "endpoint=${ENDPOINT}" >> $GITHUB_ENV
+        endpoint=$(shuf -n 1 endpoints.txt)
+        echo "::set-output name=endpoint::$endpoint"
 
-    - name: Generate WireGuard Config
-      id: generate-config
+    - name: Create WireGuard Config
+      id: config
       run: |
-        PRIVATE_KEY=$(cat wireguard-key-generator/private_key.txt)
-        PUBLIC_KEY="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=" # Provided public key
-        DNS="8.8.8.8, 8.8.2.2"
-        ENDPOINT="${{ env.endpoint }}"
-        cat <<EOF > wireguard-client.conf
-        [Interface]
-        Address = 192.168.17.97/24
-        DNS = $DNS
-        PrivateKey = $PRIVATE_KEY
-
-        [Peer]
-        AllowedIPs = 0.0.0.0/0
-        Endpoint = $ENDPOINT
-        PublicKey = $PUBLIC_KEY
-EOF
+        echo "[Interface]" > wg.conf
+        echo "Address = 192.168.17.97/24" >> wg.conf
+        echo "DNS = 8.8.8.8, 8.8.2.2" >> wg.conf
+        echo "PrivateKey = $(cat wireguard-key-generator/private_key)" >> wg.conf
+        echo "" >> wg.conf
+        echo "[Peer]" >> wg.conf
+        echo "AllowedIPs = 0.0.0.0/0" >> wg.conf
+        echo "Endpoint = ${{ steps.endpoint.outputs.endpoint }}" >> wg.conf
+        echo "PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=" >> wg.conf
 
     - name: Send Config to Telegram
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        curl -F document=@wireguard-client.conf \
-             -F caption="[Interface]\nAddress = 192.168.17.97/24\nDNS = 8.8.8.8\nPrivateKey = (hidden for security)\n\n[Peer]\nAllowedIPs = 0.0.0.0/0\nEndpoint = ${{ env.endpoint }}\nPublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=" \
-             "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument?chat_id=${{ secrets.TELEGRAM_CHAT_ID }}"
+        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument" \
+          -F chat_id="${TELEGRAM_CHAT_ID}" \
+          -F document="@wg.conf" \
+          -F caption="[Interface]\nAddress = 192.168.17.97/24\nDNS = 8.8.8.8, 8.8.2.2\nPrivateKey = ***\n\n[Peer]\nAllowedIPs = 0.0.0.0/0\nEndpoint = ${{ steps.endpoint.outputs.endpoint }}\nPublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="

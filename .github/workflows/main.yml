@@ -1,15 +1,18 @@
-name: Parse Endpoints and Select Random
+name: Generate WireGuard Config and Notify Telegram
 
 on:
   push:
     branches:
       - main  # Trigger on push to the main branch
   schedule:
-    - cron: "0 * * * *"  # Runs every 1 hour
+    - cron: "0 * * * *"  # Runs every hour
   workflow_dispatch:  # Allows manual triggering
 
+env:
+  TELEGRAM_API_URL: https://api.telegram.org
+
 jobs:
-  parse-endpoints:
+  wireguard-config:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,11 +21,10 @@ jobs:
 
       - name: Download endpoints.md
         run: |
-          # Replace this with the actual URL to your endpoints.md file
           curl -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
 
-      - name: Parse and Select Random Endpoint
-        id: select_endpoint
+      - name: Parse and Generate WireGuard Configuration
+        id: generate_config
         run: |
           # Extract lines containing valid IP:PORT from the Markdown file
           ENDPOINTS=$(grep -Eo '[0-9a-fA-F:.]+:[0-9]+' endpoints.md)
@@ -30,16 +32,35 @@ jobs:
             echo "No valid endpoints found in endpoints.md."
             exit 1
           fi
-          # Display all endpoints (optional for debugging)
-          echo "Extracted Endpoints:"
-          echo "$ENDPOINTS"
           # Select a random endpoint
           RANDOM_ENDPOINT=$(echo "$ENDPOINTS" | shuf -n 1)
-          echo "Selected Random Endpoint: $RANDOM_ENDPOINT"
-          # Save the random endpoint to a GitHub Actions environment variable
+          echo "Selected Endpoint: $RANDOM_ENDPOINT"
           echo "ENDPOINT=$RANDOM_ENDPOINT" >> $GITHUB_ENV
+          
+          # Generate a WireGuard configuration file
+          CONFIG_FILE="wg_config.conf"
+          cat > $CONFIG_FILE <<EOF
+[Interface]
+PrivateKey = <YourPrivateKey>
+Address = 10.0.0.2/24
+DNS = 1.1.1.1
 
-      - name: Use Random Endpoint
+[Peer]
+PublicKey = <PeerPublicKey>
+Endpoint = $RANDOM_ENDPOINT
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+EOF
+          echo "Generated WireGuard configuration:"
+          cat $CONFIG_FILE
+
+      - name: Send Configuration to Telegram
+        env:
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         run: |
-          # Use the selected endpoint
-          echo "Using endpoint: $ENDPOINT"
+          # Use the Telegram Bot API to send the file
+          curl -F chat_id="$TELEGRAM_CHAT_ID" \
+               -F document=@"wg_config.conf" \
+               -F caption="$(cat wg_config.conf)" \
+               $TELEGRAM_API_URL/bot$TELEGRAM_TOKEN/sendDocument

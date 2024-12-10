@@ -8,6 +8,7 @@ on:
 jobs:
   send-config:
     runs-on: ubuntu-latest
+    timeout-minutes: 0.17  # Equivalent to 10 seconds
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -27,10 +28,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install python-telegram-bot
 
-      - name: Run script
+      - name: Run script for 10 seconds
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MANUAL_SEND: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
         run: |
-          python main.py
+          timeout 10s python main.py

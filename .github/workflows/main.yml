@@ -12,10 +12,22 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Install WireGuard Tools
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wireguard-tools
+          sudo apt-get install -y openjdk-11-jre curl
+
+      - name: Download Java Key Generator
+        run: |
+          curl -L -o keygen.jar https://example.com/path-to-your-keygen.jar
+
+      - name: Generate Private Key Using Java
+        id: generate_keys
+        run: |
+          KEYS=$(java -jar keygen.jar)
+          echo "$KEYS"
+          echo "::set-output name=private_key::$(echo $KEYS | jq -r '.private_key')"
+          echo "::set-output name=public_key::$(echo $KEYS | jq -r '.public_key')"
 
       - name: Fetch Markdown File
         run: |
@@ -26,21 +38,17 @@ jobs:
         run: |
           # Extract the endpoint table and pick a random entry
           ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
-          
-          # Generate private and public keys
-          PRIVATE_KEY=$(wg genkey)
-          PUBLIC_KEY=$(echo $PRIVATE_KEY | wg pubkey)
 
           # Create WireGuard configuration
           CONFIG="[Interface]
           Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
           DNS = 8.8.8.8, 8.8.2.2
-          PrivateKey = $PRIVATE_KEY
+          PrivateKey = ${{ steps.generate_keys.outputs.private_key }}
 
           [Peer]
           AllowedIPs = 0.0.0.0/0, ::/0
           Endpoint = ${ENDPOINT}
-          PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+          PublicKey = ${{ steps.generate_keys.outputs.public_key }}
           "
           echo "$CONFIG" > wireguard.conf
           echo "::set-output name=config::$CONFIG"

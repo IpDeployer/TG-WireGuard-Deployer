@@ -17,7 +17,18 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y wireguard-tools
+          sudo apt install -y wireguard-tools curl
+
+      - name: Download Endpoints File
+        run: |
+          # Download the .md file from the specified URL
+          curl -L -o endpoints.md "https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md"
+
+          # Validate the file was downloaded successfully
+          if [[ ! -f endpoints.md ]]; then
+              echo "Error: Failed to download endpoints.md file."
+              exit 1
+          fi
 
       - name: Generate WireGuard Configuration
         run: |
@@ -28,11 +39,6 @@ jobs:
           fi
 
           # Extract a random endpoint
-          if [[ ! -f endpoints.md ]]; then
-              echo "Error: endpoints.md file not found."
-              exit 1
-          fi
-
           ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
           if [[ -z "$ENDPOINT" ]]; then
               echo "Error: No valid endpoint found in endpoints.md."

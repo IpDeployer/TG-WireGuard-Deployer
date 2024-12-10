@@ -27,7 +27,7 @@ jobs:
           ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
           PRIVATE_KEY=$(wg genkey)
           CONFIG="[Interface]
-          Address = 192.168.17.97/24
+          Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
           DNS = 8.8.8.8, 8.8.2.2
           PrivateKey = $PRIVATE_KEY
 

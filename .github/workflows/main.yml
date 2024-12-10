@@ -15,7 +15,13 @@ jobs:
       - name: Install WireGuard Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y wireguard-tools
+          sudo apt-get install -y wireguard-tools git
+
+      - name: Clone WireGuard Key Generator
+        run: |
+          git clone https://github.com/ParamonPlay2205/wireguard-key-generator.git
+          cd wireguard-key-generator
+          chmod +x gen_keys.sh
 
       - name: Fetch Markdown File
         run: curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
@@ -25,7 +31,14 @@ jobs:
         run: |
           # Extract the endpoint table and pick a random entry
           ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
-          PRIVATE_KEY=$(wg genkey)
+          
+          # Generate keys using wireguard-key-generator
+          cd wireguard-key-generator
+          sudo sh gen_keys.sh
+          PRIVATE_KEY=$(cat privatekey)
+          PUBLIC_KEY=$(cat publickey)
+          cd ..
+
           CONFIG="[Interface]
           Address = 192.168.17.97/24
           DNS = 8.8.8.8, 8.8.2.2

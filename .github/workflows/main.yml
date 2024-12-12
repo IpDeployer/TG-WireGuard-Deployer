@@ -1,21 +1,25 @@
-name: WireGuard Config Generation
+name: WireGuard Config Generation and Telegram Notification
 
 on:
-  push:
   schedule:
-    - cron: '0 */2 * * *'  # Run every 2 hours
+    - cron: '0 */2 * * *'  # Runs every 2 hours
   workflow_dispatch:
 
 jobs:
-  generate-wireguard-config:
+  wireguard:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v3
 
-      - name: Set up environment
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up WireGuard dependencies
         run: |
-          # Define variables inline instead of using wg-gen.conf
+          sudo apt-get update
+          sudo apt-get install -y wireguard-tools git qrencode
+
+      - name: Set environment variables inline
+        run: |
           export wg_ip="10.0.0.1"
           export wg_port="51820"
           export wg_clients=5
@@ -23,8 +27,8 @@ jobs:
           export wg_endpoint="example.com"
           export wg_tunnel="full"
           export wg_users="user1,user2,user3,user4,user5"
-      
-      - name: Run the WireGuard config generation script
+
+      - name: Run the WireGuard generation script
         run: |
           chmod +x scripts/wireguard-config.sh
           ./scripts/wireguard-config.sh
@@ -32,16 +36,12 @@ jobs:
       - name: Archive the generated configuration files
         run: |
           tar -czvf configs.tar.gz /tmp/wireguard/clients.d/
-
-      - name: Upload the configuration archive as an artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: wireguard-configs
-          path: configs.tar.gz
-
-      - name: Send WireGuard configs to Telegram channel
+        
+      - name: Send result to Telegram
         run: |
-          # Use Telegram bot to send the archive
-          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
+          # Send the results of the generated WireGuard config to a Telegram bot/channel
+          curl -X POST \
             -F chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-            -F document=@configs.tar.gz
+            -F document=@configs.tar.gz \
+            -F caption="WireGuard config generated" \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument"

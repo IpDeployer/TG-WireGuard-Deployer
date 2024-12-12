@@ -10,9 +10,12 @@ export wg_root="/tmp/wireguard"
 export wg_client_dir="${wg_root}/clients.d"
 export wg_repo_dir="${wg_root}/repo.d"
 
-# Create the necessary directories
+# Create the necessary directories with correct permissions
 mkdir -p "${wg_client_dir}"
 mkdir -p "${wg_repo_dir}"
+
+# Explicitly set permissions to allow writing
+chmod 777 "${wg_root}" "${wg_client_dir}" "${wg_repo_dir}"
 
 # Define WireGuard variables
 export wg_ip="10.0.0.1"

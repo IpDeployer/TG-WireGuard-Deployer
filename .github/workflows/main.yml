@@ -18,11 +18,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wireguard qrencode git
 
-      - name: Make Script Executable
-        run: chmod +x scripts/wireguard-config.sh
+      - name: Define Configuration Variables
+        run: |
+          # Define variables inline instead of using wg-gen.conf
+          export wg_ip="10.0.0.1"
+          export wg_port="51820"
+          export wg_clients=5
+          export wg_dns="8.8.8.8,8.8.4.4"
+          export wg_endpoint="example.com"
+          export wg_tunnel="full"
+          export wg_users="user1,user2,user3,user4,user5"
 
-      - name: Generate WireGuard Configurations
-        run: ./scripts/wireguard-config.sh
+          # Run the WireGuard generation script
+          chmod +x scripts/wireguard-config.sh
+          ./scripts/wireguard-config.sh
 
       - name: Compress Configuration Files
         run: |
@@ -34,7 +43,6 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # Send the configuration archive to Telegram
           curl -F chat_id="$TELEGRAM_CHAT_ID" \
                -F document=@"configs.tar.gz" \
                "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument"

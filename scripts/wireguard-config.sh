@@ -5,7 +5,7 @@ set -eu
 # Set umask to ensure secure file permissions
 umask 0777
 
-# Ensure the temporary directory structure exists and is writable
+# Ensure directories are writable
 mkdir -p "./wg_temp/clients.d"
 mkdir -p "./wg_temp/repo.d"
 chmod -R 0777 "./wg_temp"

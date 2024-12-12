@@ -5,10 +5,14 @@ set -eu
 # Set umask to ensure secure file permissions
 umask 0777
 
-# Ensure directories are writable
-mkdir -p "./wg_temp/clients.d"
-mkdir -p "./wg_temp/repo.d"
-chmod -R 0777 "./wg_temp"
+# Use /tmp for temporary files to avoid permission issues
+export wg_root="/tmp/wireguard"
+export wg_client_dir="${wg_root}/clients.d"
+export wg_repo_dir="${wg_root}/repo.d"
+
+# Create the necessary directories
+mkdir -p "${wg_client_dir}"
+mkdir -p "${wg_repo_dir}"
 
 # Define WireGuard variables
 export wg_ip="10.0.0.1"
@@ -19,17 +23,8 @@ export wg_endpoint="example.com"
 export wg_tunnel="full"
 export wg_users="user1,user2,user3,user4,user5"
 
-# Define the WireGuard directory structure
-export wg_root="./wg_temp"
-export wg_client_dir="${wg_root}/clients.d"
-export wg_repo_dir="${wg_root}/repo.d"
-
 # Calculate network prefix
 wg_int_net=$(awk -F. '{print $1 "." $2 "." $3}' <<< ${wg_ip})
-
-# Ensure necessary directories exist
-mkdir -p "${wg_client_dir}"
-mkdir -p "${wg_repo_dir}"
 
 # Function to generate keypair
 function gen_keypair ()

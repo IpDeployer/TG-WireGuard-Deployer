@@ -5,15 +5,28 @@ set -eu
 # Set umask to ensure secure file permissions
 umask 0777
 
-# Ensure all environment variables are set or use default values
-wg_root="./wg_temp"
-wg_client_dir="${wg_root}/clients.d"
-wg_repo_dir="${wg_root}/repo.d"
+# Ensure directories are writable
+mkdir -p "./wg_temp/clients.d"
+chmod -R 0777 "./wg_temp"
 
-# Use the environment variables defined in the workflow or fall back to defaults
+# Define WireGuard variables
+export wg_ip="10.0.0.1"
+export wg_port="51820"
+export wg_clients=5
+export wg_dns="8.8.8.8,8.8.4.4"
+export wg_endpoint="example.com"
+export wg_tunnel="full"
+export wg_users="user1,user2,user3,user4,user5"
+
+# Define the WireGuard directory structure
+export wg_root="./wg_temp"
+export wg_client_dir="${wg_root}/clients.d"
+export wg_repo_dir="${wg_root}/repo.d"
+
+# Calculate network prefix
 wg_int_net=$(awk -F. '{print $1 "." $2 "." $3}' <<< ${wg_ip})
 
-# Ensure the necessary directories exist
+# Ensure necessary directories exist
 mkdir -p "${wg_client_dir}"
 mkdir -p "${wg_repo_dir}"
 
@@ -93,13 +106,6 @@ EOF
     chmod 0600 "${wg_client_dir}/$((i+1)).conf"
     chmod 0600 "${wg_client_dir}/$((i+1)).png"
 done
-
-# Optionally, you can handle publishing the configuration to a remote repository or other actions
-# For example, you could push the generated files to a git repo here
-# If using GitHub, uncomment and modify below for git actions
-# git add -A
-# git commit -m "Generated WireGuard configurations"
-# git push
 
 # Skip system service restart in GitHub Actions
 # systemctl restart wg-quick@wg0.service

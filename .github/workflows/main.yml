@@ -1,24 +1,19 @@
-name: Generate WireGuard Config and Notify
+name: WireGuard Config Generation
 
 on:
-  workflow_dispatch:
+  push:
   schedule:
-    - cron: "0 */2 * * *"  # Run every 2 hours
+    - cron: '0 */2 * * *'  # Run every 2 hours
+  workflow_dispatch:
 
 jobs:
   generate-wireguard-config:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
+      - name: Checkout the repository
         uses: actions/checkout@v3
 
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wireguard qrencode git
-
-      - name: Define Configuration Variables
+      - name: Set up environment
         run: |
           # Define variables inline instead of using wg-gen.conf
           export wg_ip="10.0.0.1"
@@ -28,21 +23,25 @@ jobs:
           export wg_endpoint="example.com"
           export wg_tunnel="full"
           export wg_users="user1,user2,user3,user4,user5"
-
-          # Run the WireGuard generation script
+      
+      - name: Run the WireGuard config generation script
+        run: |
           chmod +x scripts/wireguard-config.sh
           ./scripts/wireguard-config.sh
 
-      - name: Compress Configuration Files
+      - name: Archive the generated configuration files
         run: |
-          # Archive the generated configuration files
-          tar -czvf configs.tar.gz /etc/wireguard/clients.d/
+          tar -czvf configs.tar.gz /tmp/wireguard/clients.d/
 
-      - name: Send Configurations to Telegram
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Upload the configuration archive as an artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: wireguard-configs
+          path: configs.tar.gz
+
+      - name: Send WireGuard configs to Telegram channel
         run: |
-          curl -F chat_id="$TELEGRAM_CHAT_ID" \
-               -F document=@"configs.tar.gz" \
-               "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument"
+          # Use Telegram bot to send the archive
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
+            -F chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+            -F document=@configs.tar.gz

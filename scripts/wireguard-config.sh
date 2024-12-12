@@ -2,14 +2,19 @@
 
 set -eu
 
-export wg_root='/etc/wireguard'
-export wg_client_dir="${wg_root}/clients.d"
-export wg_repo_dir="${wg_root}/repo.d"
+# Ensure all environment variables are set or use default values
+wg_root="./wg_temp"
+wg_client_dir="${wg_root}/clients.d"
+wg_repo_dir="${wg_root}/repo.d"
 
-. "${wg_root}/wg-gen.conf"
-
+# Use the environment variables defined in the workflow or fall back to defaults
 wg_int_net=$(awk -F. '{print $1 "." $2 "." $3}' <<< ${wg_ip})
 
+# Ensure the necessary directories exist
+mkdir -p "${wg_client_dir}"
+mkdir -p "${wg_repo_dir}"
+
+# Function to generate keypair
 function gen_keypair ()
 {
     if [ ! -f "${1}/${2}.privkey" ]
@@ -22,6 +27,7 @@ function gen_keypair ()
     chmod 0644 "${1}/${2}.pubkey"
 }
 
+# Function to generate preshared key (PSK)
 function gen_psk ()
 {
     if [ ! -f "${1}/${2}.psk" ]
@@ -32,70 +38,7 @@ function gen_psk ()
     chmod 0600 "${1}/${2}.psk"
 }
 
-function parse_users ()
-{
-    do_users=0
-    if [ ! -z ${wg_users+x} ]
-    then
-        IFS=',' wg_users_arr=( ${wg_users} )
-        if [ ${wg_clients} -eq ${#wg_users_arr[@]} ]
-        then
-            do_users=1
-        fi
-    fi
-}
-
-function print_users ()
-{
-    if [ ${do_users} -ne 1 ]
-    then
-        return
-    fi
-
-    for (( i=0; i<${wg_clients}; i++ ))
-    do
-        echo ${wg_users_arr[i]}
-    done
-}
-
-function publish_config ()
-{
-    if [ ${do_users} -ne 1 ]
-    then
-        return
-    fi
-
-    if [ ! -d "${wg_repo_dir}" ]
-    then
-        return
-    fi
-
-    pushd "${wg_repo_dir}" > /dev/null
-    git reset --hard > /dev/null
-
-    for (( i=0; i<${wg_clients}; i++ ))
-    do
-        \cp -f "${wg_client_dir}/$((i+2)).conf" "${wg_users_arr[i]}.conf"
-        \cp -f "${wg_client_dir}/$((i+2)).png" "${wg_users_arr[i]}.png"
-    done
-
-    git add -A
-    date_str=$(date +%Y%m%d-%H%M%S)
-    git diff-index --quiet HEAD || git commit -m "Generated config ${date_str}"
-
-    # check if remotes are configured
-    do_push=0
-    git ls-remote &> /dev/null && do_push=1
-    if [ ${do_push} -eq 1 ]
-    then
-        # remote exists, push
-        git push -f
-    fi
-
-    popd > /dev/null
-}
-
-mkdir -p "${wg_client_dir}"
+# Generate server configuration file
 gen_keypair "${wg_root}" server
 
 cat << EOF > "${wg_root}/wg0.conf"
@@ -103,9 +46,9 @@ cat << EOF > "${wg_root}/wg0.conf"
 PrivateKey = $(cat "${wg_root}/server.privkey")
 Address = ${wg_int_net}.1/24
 ListenPort = ${wg_port}
-
 EOF
 
+# Generate client configurations and related files
 for (( i=1; i<=${wg_clients}; i++ ))
 do
     gen_keypair "${wg_client_dir}" $((i+1))
@@ -135,15 +78,12 @@ EOF
         split)
             echo "AllowedIPs = ${wg_int_net}.0/24" >> "${wg_client_dir}/$((i+1)).conf"
             ;;
-
         full)
             echo "AllowedIPs = 0.0.0.0/0" >> "${wg_client_dir}/$((i+1)).conf"
             ;;
-
         *)
             echo "Error! Invalid tunnel type: ${wg_tunnel}"
             exit 1
-
     esac
 
     cat "${wg_client_dir}/$((i+1)).conf" | qrencode -t PNG -o "${wg_client_dir}/$((i+1)).png"
@@ -151,7 +91,12 @@ EOF
     chmod 0600 "${wg_client_dir}/$((i+1)).png"
 done
 
-parse_users
-publish_config
+# Optionally, you can handle publishing the configuration to a remote repository or other actions
+# For example, you could push the generated files to a git repo here
+# If using GitHub, uncomment and modify below for git actions
+# git add -A
+# git commit -m "Generated WireGuard configurations"
+# git push
 
+# Restart the WireGuard service (ensure you have a proper wg-quick service)
 systemctl restart wg-quick@wg0.service

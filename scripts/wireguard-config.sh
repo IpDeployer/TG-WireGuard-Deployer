@@ -1,28 +1,9 @@
 #!/bin/bash
 
-set -eu
+set -euo pipefail
+set -x  # Enable debugging to show each command as it's executed
 
-# Set umask to ensure secure file permissions
-umask 0777
-
-# Use /tmp for temporary files to avoid permission issues
-export wg_root="/tmp/wireguard"
-export wg_client_dir="${wg_root}/clients.d"
-export wg_repo_dir="${wg_root}/repo.d"
-
-# Create the necessary directories with correct permissions
-mkdir -p "${wg_client_dir}"
-mkdir -p "${wg_repo_dir}"
-
-# Explicitly set permissions to allow writing
-chmod 777 "${wg_root}" "${wg_client_dir}" "${wg_repo_dir}"
-
-# Debugging: Log directory and file permissions
-echo "Permissions for wg_root: $(ls -ld ${wg_root})"
-echo "Permissions for wg_client_dir: $(ls -ld ${wg_client_dir})"
-echo "Permissions for wg_repo_dir: $(ls -ld ${wg_repo_dir})"
-
-# Define WireGuard variables
+# Define variables inline instead of using wg-gen.conf
 export wg_ip="10.0.0.1"
 export wg_port="51820"
 export wg_clients=5
@@ -31,10 +12,15 @@ export wg_endpoint="example.com"
 export wg_tunnel="full"
 export wg_users="user1,user2,user3,user4,user5"
 
-# Calculate network prefix
-wg_int_net=$(awk -F. '{print $1 "." $2 "." $3}' <<< ${wg_ip})
+# Define other necessary directories
+export wg_root="/tmp/wireguard"
+export wg_client_dir="${wg_root}/clients.d"
+export wg_repo_dir="${wg_root}/repo.d"
 
-# Function to generate keypair
+mkdir -p "${wg_client_dir}"
+mkdir -p "${wg_repo_dir}"
+
+# Define WireGuard generation functions
 function gen_keypair ()
 {
     if [ ! -f "${1}/${2}.privkey" ]
@@ -47,7 +33,6 @@ function gen_keypair ()
     chmod 0644 "${1}/${2}.pubkey"
 }
 
-# Function to generate preshared key (PSK)
 function gen_psk ()
 {
     if [ ! -f "${1}/${2}.psk" ]
@@ -58,12 +43,11 @@ function gen_psk ()
     chmod 0600 "${1}/${2}.psk"
 }
 
-# Generate server configuration file
+# Generate WireGuard server config
+wg_int_net=$(awk -F. '{print $1 "." $2 "." $3}' <<< ${wg_ip})
+
 gen_keypair "${wg_root}" server
 
-# Ensure the server config file is created with the right permissions
-touch "${wg_root}/wg0.conf"   # Ensure file exists
-chmod 666 "${wg_root}/wg0.conf"  # Set correct permissions
 cat << EOF > "${wg_root}/wg0.conf"
 [Interface]
 PrivateKey = $(cat "${wg_root}/server.privkey")
@@ -71,7 +55,7 @@ Address = ${wg_int_net}.1/24
 ListenPort = ${wg_port}
 EOF
 
-# Generate client configurations and related files
+# Generate client configs
 for (( i=1; i<=${wg_clients}; i++ ))
 do
     gen_keypair "${wg_client_dir}" $((i+1))
@@ -84,9 +68,6 @@ PresharedKey = $(cat "${wg_client_dir}/$((i+1)).psk")
 AllowedIPs = ${wg_int_net}.$((i+1))/32
 EOF
 
-    # Ensure each client config file exists and has the correct permissions
-    touch "${wg_client_dir}/$((i+1)).conf"   # Ensure file exists
-    chmod 666 "${wg_client_dir}/$((i+1)).conf"  # Set correct permissions
     cat << EOF > "${wg_client_dir}/$((i+1)).conf"
 [Interface]
 PrivateKey = $(cat "${wg_client_dir}/$((i+1)).privkey")
@@ -112,13 +93,10 @@ EOF
             exit 1
     esac
 
-    # Ensure QR code image exists and has correct permissions
-    touch "${wg_client_dir}/$((i+1)).png"   # Ensure file exists
-    chmod 666 "${wg_client_dir}/$((i+1)).png"  # Set correct permissions
     cat "${wg_client_dir}/$((i+1)).conf" | qrencode -t PNG -o "${wg_client_dir}/$((i+1)).png"
     chmod 0600 "${wg_client_dir}/$((i+1)).conf"
     chmod 0600 "${wg_client_dir}/$((i+1)).png"
 done
 
-# Skip system service restart in GitHub Actions
-# systemctl restart wg-quick@wg0.service
+# Archive the generated files
+tar -czvf /tmp/wireguard/configs.tar.gz -C "${wg_root}" clients.d/

@@ -1,56 +1,48 @@
-name: Generate and Send WireGuard Config
+name: Generate WireGuard Config and Notify
 
 on:
   schedule:
-    - cron: "0 * * * *" # Run every hour
-  workflow_dispatch: # Allows manual trigger
+    - cron: "0 */2 * * *"  # Run every 2 hours
 
 jobs:
-  generate-and-send:
+  generate-wireguard-config:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Install WireGuard Tools
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wireguard-tools
+          sudo apt-get install -y wireguard qrencode git
 
-      - name: Fetch Markdown File
+      - name: Generate WireGuard Configurations
         run: |
-          curl -s -o endpoints.md https://raw.githubusercontent.com/Json-Script/engage.cloudflareclient.com/refs/heads/main/addPrt/Endpoint/IPV6/Irancell_TEST_V6_October222024.md
-
-      - name: Parse Endpoints and Generate Config
-        id: generate_config
-        run: |
-          # Extract the endpoint table and pick a random entry
-          ENDPOINT=$(awk '/\| [0-9a-f]/ {print $2}' endpoints.md | shuf -n 1)
+          # Set up WireGuard variables
+          export wg_root='/etc/wireguard'
+          export wg_client_dir="${wg_root}/clients.d"
+          export wg_repo_dir="${wg_root}/repo.d"
           
-          # Generate private and public keys
-          PRIVATE_KEY=$(wg genkey)
-          PUBLIC_KEY=$(echo $PRIVATE_KEY | wg pubkey)
+          # Ensure directories exist
+          mkdir -p "${wg_client_dir}"
+          mkdir -p "${wg_repo_dir}"
 
-          # Create WireGuard configuration
-          CONFIG="[Interface]
-          Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
-          DNS = 8.8.8.8, 8.8.2.2
-          PrivateKey = $PRIVATE_KEY
+          # Your WireGuard script logic here
+          chmod +x ./path/to/your-script.sh
+          ./path/to/your-script.sh
 
-          [Peer]
-          AllowedIPs = 0.0.0.0/0, ::/0
-          Endpoint = ${ENDPOINT}
-          PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
-          "
-          echo "$CONFIG" > wireguard.conf
-          echo "::set-output name=config::$CONFIG"
+      - name: Compress Configuration Files
+        run: |
+          # Archive the generated configuration files
+          tar -czvf configs.tar.gz /etc/wireguard/clients.d/
 
-      - name: Send Config to Telegram
+      - name: Send Configurations to Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument \
-          -F chat_id=${TELEGRAM_CHAT_ID} \
-          -F document=@wireguard.conf \
-          -F caption="$(cat wireguard.conf)"
+          # Send the configuration archive to Telegram
+          curl -F chat_id="$TELEGRAM_CHAT_ID" \
+               -F document=@"configs.tar.gz" \
+               "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendDocument"

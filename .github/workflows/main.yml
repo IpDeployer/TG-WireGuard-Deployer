@@ -17,20 +17,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wireguard qrencode git
 
-      - name: Generate WireGuard Configurations
-        run: |
-          # Set up WireGuard variables
-          export wg_root='/etc/wireguard'
-          export wg_client_dir="${wg_root}/clients.d"
-          export wg_repo_dir="${wg_root}/repo.d"
-          
-          # Ensure directories exist
-          mkdir -p "${wg_client_dir}"
-          mkdir -p "${wg_repo_dir}"
+      - name: Make Script Executable
+        run: chmod +x scripts/wireguard-config.sh
 
-          # Your WireGuard script logic here
-          chmod +x ./path/to/your-script.sh
-          ./path/to/your-script.sh
+      - name: Generate WireGuard Configurations
+        run: ./scripts/wireguard-config.sh
 
       - name: Compress Configuration Files
         run: |

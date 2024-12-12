@@ -62,6 +62,8 @@ function gen_psk ()
 gen_keypair "${wg_root}" server
 
 # Ensure the server config file is created with the right permissions
+touch "${wg_root}/wg0.conf"   # Ensure file exists
+chmod 666 "${wg_root}/wg0.conf"  # Set correct permissions
 cat << EOF > "${wg_root}/wg0.conf"
 [Interface]
 PrivateKey = $(cat "${wg_root}/server.privkey")
@@ -82,6 +84,9 @@ PresharedKey = $(cat "${wg_client_dir}/$((i+1)).psk")
 AllowedIPs = ${wg_int_net}.$((i+1))/32
 EOF
 
+    # Ensure each client config file exists and has the correct permissions
+    touch "${wg_client_dir}/$((i+1)).conf"   # Ensure file exists
+    chmod 666 "${wg_client_dir}/$((i+1)).conf"  # Set correct permissions
     cat << EOF > "${wg_client_dir}/$((i+1)).conf"
 [Interface]
 PrivateKey = $(cat "${wg_client_dir}/$((i+1)).privkey")
@@ -107,6 +112,9 @@ EOF
             exit 1
     esac
 
+    # Ensure QR code image exists and has correct permissions
+    touch "${wg_client_dir}/$((i+1)).png"   # Ensure file exists
+    chmod 666 "${wg_client_dir}/$((i+1)).png"  # Set correct permissions
     cat "${wg_client_dir}/$((i+1)).conf" | qrencode -t PNG -o "${wg_client_dir}/$((i+1)).png"
     chmod 0600 "${wg_client_dir}/$((i+1)).conf"
     chmod 0600 "${wg_client_dir}/$((i+1)).png"

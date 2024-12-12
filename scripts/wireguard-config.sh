@@ -17,6 +17,11 @@ mkdir -p "${wg_repo_dir}"
 # Explicitly set permissions to allow writing
 chmod 777 "${wg_root}" "${wg_client_dir}" "${wg_repo_dir}"
 
+# Debugging: Log directory and file permissions
+echo "Permissions for wg_root: $(ls -ld ${wg_root})"
+echo "Permissions for wg_client_dir: $(ls -ld ${wg_client_dir})"
+echo "Permissions for wg_repo_dir: $(ls -ld ${wg_repo_dir})"
+
 # Define WireGuard variables
 export wg_ip="10.0.0.1"
 export wg_port="51820"

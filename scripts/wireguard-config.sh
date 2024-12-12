@@ -2,6 +2,9 @@
 
 set -eu
 
+# Set umask to ensure secure file permissions
+umask 0777
+
 # Ensure all environment variables are set or use default values
 wg_root="./wg_temp"
 wg_client_dir="${wg_root}/clients.d"
@@ -98,5 +101,5 @@ done
 # git commit -m "Generated WireGuard configurations"
 # git push
 
-# Restart the WireGuard service (ensure you have a proper wg-quick service)
-systemctl restart wg-quick@wg0.service
+# Skip system service restart in GitHub Actions
+# systemctl restart wg-quick@wg0.service

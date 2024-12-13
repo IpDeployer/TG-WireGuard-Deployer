@@ -36,20 +36,19 @@ jobs:
       run: |
         # Define configuration variables
         PRIVATE_KEY="${{ env.PRIVATE_KEY }}"
-        PUBLIC_KEY="${{ env.PUBLIC_KEY }}"
-        PEER_PUBLIC_KEY="Replace_With_Peer_Public_Key" # Update with actual peer public key
-        PEER_ENDPOINT="Replace_With_Peer_Endpoint"    # Update with actual peer endpoint
+        PUBLIC_KEY="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+        PEER_ENDPOINT="Replace_With_Peer_Endpoint" # Update with actual peer endpoint
 
         # Create configuration
         cat > wg0.conf <<EOL
         [Interface]
         PrivateKey = $PRIVATE_KEY
-        Address = 192.168.2.1/24
+        Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
         ListenPort = 51820
 
         [Peer]
-        PublicKey = $PEER_PUBLIC_KEY
-        AllowedIPs = 192.168.2.2/32
+        PublicKey = $PUBLIC_KEY
+        AllowedIPs = 0.0.0.0/0, ::/0
         Endpoint = $PEER_ENDPOINT
         PersistentKeepalive = 25
         EOL

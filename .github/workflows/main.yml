@@ -1,47 +1,62 @@
-name: WireGuard Config Generation and Telegram Notification
+name: Generate WireGuard Config and Notify
 
 on:
-  schedule:
-    - cron: '0 */2 * * *'  # Runs every 2 hours
   workflow_dispatch:
+    inputs:
+      peers_count:
+        description: "Number of peers to generate"
+        required: true
+        default: 1
 
 jobs:
-  wireguard:
+  generate-wireguard-config:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+    - name: Set up environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wireguard-tools
 
-      - name: Set up WireGuard dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wireguard-tools git qrencode
+    - name: Generate WireGuard keys
+      id: generate_keys
+      run: |
+        umask 077
+        wg genkey | tee privatekey | wg pubkey > publickey
 
-      - name: Set environment variables inline
-        run: |
-          export wg_ip="10.0.0.1"
-          export wg_port="51820"
-          export wg_clients=5
-          export wg_dns="8.8.8.8,8.8.4.4"
-          export wg_endpoint="example.com"
-          export wg_tunnel="full"
-          export wg_users="user1,user2,user3,user4,user5"
+    - name: Generate WireGuard configuration
+      id: generate_config
+      run: |
+        PRIVATE_KEY=$(cat privatekey)
+        PUBLIC_KEY=$(cat publickey)
+        PEERS_COUNT=${{ github.event.inputs.peers_count }}
+        WG_CONFIG="[Interface]
+        PrivateKey = $PRIVATE_KEY
+        Address = 10.0.0.1/24
+        ListenPort = 51820
 
-      - name: Run the WireGuard generation script
-        run: |
-          chmod +x scripts/wireguard-config.sh
-          ./scripts/wireguard-config.sh
+        "
+        for ((i=1; i<=PEERS_COUNT; i++))
+        do
+          PEER_PRIVATE_KEY=$(wg genkey)
+          PEER_PUBLIC_KEY=$(echo $PEER_PRIVATE_KEY | wg pubkey)
+          WG_CONFIG+="[Peer]
+          PublicKey = $PEER_PUBLIC_KEY
+          AllowedIPs = 10.0.0.$((i+1))/32
+          Endpoint = engage.cloudflareclient.com:2408
+          "
+        done
+        echo "$WG_CONFIG" > wireguard.conf
+        echo "::set-output name=config::$(cat wireguard.conf)"
+      
+    - name: Show configuration
+      run: cat wireguard.conf
 
-      - name: Archive the generated configuration files
-        run: |
-          tar -czvf configs.tar.gz /tmp/wireguard/clients.d/
-        
-      - name: Send result to Telegram
-        run: |
-          # Send the results of the generated WireGuard config to a Telegram bot/channel
-          curl -X POST \
-            -F chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-            -F document=@configs.tar.gz \
-            -F caption="WireGuard config generated" \
-            "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument"
+    - name: Send configuration to Telegram
+      env:
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      run: |
+        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+          -d chat_id="${TELEGRAM_CHAT_ID}" \
+          -d text="WireGuard Configuration:\n\n$(cat wireguard.conf)"

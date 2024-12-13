@@ -1,56 +1,75 @@
-name: WireGuard V2Ray URI Generation and Telegram Notification
+name: Generate WireGuard Config
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
-  generate_wireguard_config:
+  generate-config:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check out the repository
+    - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Set up WireGuard
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wireguard
+    - name: Install WireGuard tools
+      run: sudo apt-get update && sudo apt-get install -y wireguard-tools
 
     - name: Generate WireGuard keys
+      id: gen-keys
       run: |
+        # Set umask for security
         umask 077
+        
+        # Generate private and public keys
         wg genkey | tee privatekey | wg pubkey > publickey
+        
+        # Read keys into variables
+        PRIVATE_KEY=$(cat privatekey)
+        PUBLIC_KEY=$(cat publickey)
 
-    - name: Create WireGuard config
+        # Export keys for later steps
+        echo "PRIVATE_KEY=${PRIVATE_KEY}" >> $GITHUB_ENV
+        echo "PUBLIC_KEY=${PUBLIC_KEY}" >> $GITHUB_ENV
+
+    - name: Create WireGuard configuration
+      id: create-config
       run: |
-        cat <<EOF > wg0.conf
+        # Define configuration variables
+        PRIVATE_KEY="${{ env.PRIVATE_KEY }}"
+        PUBLIC_KEY="${{ env.PUBLIC_KEY }}"
+        PEER_PUBLIC_KEY="Replace_With_Peer_Public_Key" # Update with actual peer public key
+        PEER_ENDPOINT="Replace_With_Peer_Endpoint"    # Update with actual peer endpoint
+        
+        # Create configuration
+        cat > wg0.conf <<EOL
         [Interface]
-        PrivateKey = $(cat privatekey)
-        Address = 172.16.0.2/32, 2606:4700:110:8df4:1e81:4e99:796e:9ea9/128
+        PrivateKey = $PRIVATE_KEY
+        Address = 192.168.2.1/24
+        ListenPort = 51820
 
         [Peer]
-        PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
-        Endpoint = engage.cloudflareclient.com:2408
-        AllowedIPs = 0.0.0.0/0, ::/0
+        PublicKey = $PEER_PUBLIC_KEY
+        AllowedIPs = 192.168.2.2/32
+        Endpoint = $PEER_ENDPOINT
         PersistentKeepalive = 25
-        EOF
+        EOL
 
-    - name: Create V2Ray WireGuard URI
-      run: |
-        private_key=$(cat privatekey)
-        public_key=$(cat publickey)
-        uri="wireguard://$(echo -n "$public_key" | base64 -w 0)%40engage.cloudflareclient.com:2408?address=172.16.0.2%2F32%2C2606%3A4700%3A110%3A8df4%3A1e81%3A4e99%3A796e%3A9ea9%2F128&presharedkey=&reserved=173%2C24%2C10&publickey=$(echo -n "$public_key" | base64 -w 0)&mtu=1280#Warp"
-        echo "Generated V2Ray WireGuard URI: $uri" > uri.txt
+        # Display configuration
+        cat wg0.conf
+        
+        # Export for later steps
+        echo "WIREGUARD_CONFIG=$(cat wg0.conf | base64)" >> $GITHUB_ENV
 
-    - name: Send URI to Telegram Channel
+    - name: Send configuration to Telegram
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        uri=$(cat uri.txt)
-        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-          -d chat_id="${TELEGRAM_CHAT_ID}" \
-          -d text="WireGuard V2Ray URI:\n$uri"
+        # Decode configuration from base64
+        CONFIG=$(echo "${{ env.WIREGUARD_CONFIG }}" | base64 --decode)
+        
+        # Send the configuration to Telegram
+        curl -s -X POST https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage \
+          -d chat_id=$TELEGRAM_CHAT_ID \
+          -d text="WireGuard Configuration:\n\n\`\`\`\n$CONFIG\n\`\`\`" \
+          -d parse_mode=MarkdownV2

@@ -1,102 +1,56 @@
-name: Generate WireGuard Config and Notify
+name: WireGuard V2Ray URI Generation and Telegram Notification
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      peers_count:
-        description: "Number of peers to generate"
-        required: true
-        default: 1
 
 jobs:
-  generate-wireguard-config:
+  generate_wireguard_config:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Set up environment
+    - name: Check out the repository
+      uses: actions/checkout@v3
+
+    - name: Set up WireGuard
       run: |
         sudo apt-get update
-        sudo apt-get install -y wireguard-tools
+        sudo apt-get install -y wireguard
 
     - name: Generate WireGuard keys
-      id: generate_keys
       run: |
-        # Generate the server private and public keys
-        SERVER_PRIVATE_KEY=$(wg genkey)
-        SERVER_PUBLIC_KEY=$(echo $SERVER_PRIVATE_KEY | wg pubkey)
+        umask 077
+        wg genkey | tee privatekey | wg pubkey > publickey
 
-        # Save server keys for use in the config
-        echo "Server Private Key: $SERVER_PRIVATE_KEY"
-        echo "$SERVER_PRIVATE_KEY" > privatekey
-        echo "$SERVER_PUBLIC_KEY" > publickey
-
-        # Generate a random port (use a default one if not specified)
-        LISTEN_PORT="51820"
-
-    - name: Generate WireGuard configuration
-      id: generate_config
+    - name: Create WireGuard config
       run: |
-        # Load the server's keys from the previous step
-        SERVER_PRIVATE_KEY=$(cat privatekey)
-        SERVER_PUBLIC_KEY=$(cat publickey)
+        cat <<EOF > wg0.conf
+        [Interface]
+        PrivateKey = $(cat privatekey)
+        Address = 172.16.0.2/32, 2606:4700:110:8df4:1e81:4e99:796e:9ea9/128
 
-        # Server IP and the number of peers
-        SERVER_IP="10.0.0.1"
-        PEERS_COUNT=${{ github.event.inputs.peers_count }}
+        [Peer]
+        PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+        Endpoint = engage.cloudflareclient.com:2408
+        AllowedIPs = 0.0.0.0/0, ::/0
+        PersistentKeepalive = 25
+        EOF
 
-        # Start the WireGuard server configuration
-        WG_CONFIG="[Interface]
-PrivateKey = $SERVER_PRIVATE_KEY
-Address = $SERVER_IP/24
-ListenPort = $LISTEN_PORT
-"
+    - name: Create V2Ray WireGuard URI
+      run: |
+        private_key=$(cat privatekey)
+        public_key=$(cat publickey)
+        uri="wireguard://$(echo -n "$public_key" | base64 -w 0)%40engage.cloudflareclient.com:2408?address=172.16.0.2%2F32%2C2606%3A4700%3A110%3A8df4%3A1e81%3A4e99%3A796e%3A9ea9%2F128&presharedkey=&reserved=173%2C24%2C10&publickey=$(echo -n "$public_key" | base64 -w 0)&mtu=1280#Warp"
+        echo "Generated V2Ray WireGuard URI: $uri" > uri.txt
 
-        # Generate peer configurations
-        for ((i=1; i<=PEERS_COUNT; i++))
-        do
-          PEER_PRIVATE_KEY=$(wg genkey)
-          PEER_PUBLIC_KEY=$(echo $PEER_PRIVATE_KEY | wg pubkey)
-          PEER_IP="10.0.0.$((i+1))"
-
-          # Add peer to server configuration
-          WG_CONFIG+="
-[Peer]
-PublicKey = $PEER_PUBLIC_KEY
-AllowedIPs = $PEER_IP/32
-Endpoint = engage.cloudflareclient.com:2408
-PersistentKeepalive = 25
-"
-
-          # Create a peer configuration file
-          echo "[Interface]
-PrivateKey = $PEER_PRIVATE_KEY
-Address = $PEER_IP/24
-
-[Peer]
-PublicKey = $SERVER_PUBLIC_KEY
-AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = engage.cloudflareclient.com:2408
-PersistentKeepalive = 25
-" > peer-$i.conf
-        done
-
-        # Save the generated server configuration
-        echo "$WG_CONFIG" > wireguard.conf
-
-    - name: Show server configuration
-      run: cat wireguard.conf
-
-    - name: Send configuration to Telegram
+    - name: Send URI to Telegram Channel
       env:
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
+        uri=$(cat uri.txt)
         curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
           -d chat_id="${TELEGRAM_CHAT_ID}" \
-          -d text="WireGuard Server Configuration:\n\n$(cat wireguard.conf)"
-
-    - name: Upload peer configurations
-      uses: actions/upload-artifact@v3
-      with:
-        name: peer-configs
-        path: peer-*.conf
+          -d text="WireGuard V2Ray URI:\n$uri"

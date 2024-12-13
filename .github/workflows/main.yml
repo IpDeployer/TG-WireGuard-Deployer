@@ -27,29 +27,53 @@ jobs:
     - name: Generate WireGuard configuration
       id: generate_config
       run: |
+        # Define variables
         PRIVATE_KEY=$(cat privatekey)
         PUBLIC_KEY=$(cat publickey)
+        SERVER_IP="10.0.0.1"
+        LISTEN_PORT="51820"
         PEERS_COUNT=${{ github.event.inputs.peers_count }}
+
+        # Start the WireGuard server configuration
         WG_CONFIG="[Interface]
         PrivateKey = $PRIVATE_KEY
-        Address = 10.0.0.1/24
-        ListenPort = 51820
-
+        Address = $SERVER_IP/24
+        ListenPort = $LISTEN_PORT
         "
+
+        # Generate peer configurations
         for ((i=1; i<=PEERS_COUNT; i++))
         do
           PEER_PRIVATE_KEY=$(wg genkey)
           PEER_PUBLIC_KEY=$(echo $PEER_PRIVATE_KEY | wg pubkey)
-          WG_CONFIG+="[Peer]
-          PublicKey = $PEER_PUBLIC_KEY
-          AllowedIPs = 10.0.0.$((i+1))/32
-          Endpoint = engage.cloudflareclient.com:2408
-          "
+          PEER_IP="10.0.0.$((i+1))"
+
+          # Add peer to the server configuration
+          WG_CONFIG+="
+        [Peer]
+        PublicKey = $PEER_PUBLIC_KEY
+        AllowedIPs = $PEER_IP/32
+        Endpoint = engage.cloudflareclient.com:2408
+        PersistentKeepalive = 25
+        "
+
+          # Create a peer configuration file
+          echo "[Interface]
+        PrivateKey = $PEER_PRIVATE_KEY
+        Address = $PEER_IP/24
+
+        [Peer]
+        PublicKey = $PUBLIC_KEY
+        AllowedIPs = 0.0.0.0/0, ::/0
+        Endpoint = engage.cloudflareclient.com:2408
+        PersistentKeepalive = 25
+        " > peer-$i.conf
         done
+
+        # Save the server configuration
         echo "$WG_CONFIG" > wireguard.conf
-        echo "::set-output name=config::$(cat wireguard.conf)"
-      
-    - name: Show configuration
+
+    - name: Show server configuration
       run: cat wireguard.conf
 
     - name: Send configuration to Telegram
@@ -59,4 +83,10 @@ jobs:
       run: |
         curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
           -d chat_id="${TELEGRAM_CHAT_ID}" \
-          -d text="WireGuard Configuration:\n\n$(cat wireguard.conf)"
+          -d text="WireGuard Server Configuration:\n\n$(cat wireguard.conf)"
+
+    - name: Upload peer configurations
+      uses: actions/upload-artifact@v3
+      with:
+        name: peer-configs
+        path: peer-*.conf

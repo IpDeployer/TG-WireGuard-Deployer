@@ -21,22 +21,27 @@ jobs:
     - name: Generate WireGuard keys
       id: generate_keys
       run: |
-        # Generate server private and public keys
+        # Generate the server private and public keys
         SERVER_PRIVATE_KEY=$(wg genkey)
         SERVER_PUBLIC_KEY=$(echo $SERVER_PRIVATE_KEY | wg pubkey)
 
-        # Save server keys
+        # Save server keys for use in the config
+        echo "Server Private Key: $SERVER_PRIVATE_KEY"
         echo "$SERVER_PRIVATE_KEY" > privatekey
         echo "$SERVER_PUBLIC_KEY" > publickey
+
+        # Generate a random port (use a default one if not specified)
+        LISTEN_PORT="51820"
 
     - name: Generate WireGuard configuration
       id: generate_config
       run: |
-        # Define server and peer configuration details
+        # Load the server's keys from the previous step
         SERVER_PRIVATE_KEY=$(cat privatekey)
         SERVER_PUBLIC_KEY=$(cat publickey)
+
+        # Server IP and the number of peers
         SERVER_IP="10.0.0.1"
-        LISTEN_PORT="51820"
         PEERS_COUNT=${{ github.event.inputs.peers_count }}
 
         # Start the WireGuard server configuration
@@ -62,7 +67,7 @@ Endpoint = engage.cloudflareclient.com:2408
 PersistentKeepalive = 25
 "
 
-          # Create peer configuration file
+          # Create a peer configuration file
           echo "[Interface]
 PrivateKey = $PEER_PRIVATE_KEY
 Address = $PEER_IP/24
@@ -75,7 +80,7 @@ PersistentKeepalive = 25
 " > peer-$i.conf
         done
 
-        # Save the server configuration to file
+        # Save the generated server configuration
         echo "$WG_CONFIG" > wireguard.conf
 
     - name: Show server configuration

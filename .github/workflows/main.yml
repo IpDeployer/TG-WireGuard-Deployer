@@ -21,25 +21,30 @@ jobs:
     - name: Generate WireGuard keys
       id: generate_keys
       run: |
-        umask 077
-        wg genkey | tee privatekey | wg pubkey > publickey
+        # Generate server private and public keys
+        SERVER_PRIVATE_KEY=$(wg genkey)
+        SERVER_PUBLIC_KEY=$(echo $SERVER_PRIVATE_KEY | wg pubkey)
+
+        # Save server keys
+        echo "$SERVER_PRIVATE_KEY" > privatekey
+        echo "$SERVER_PUBLIC_KEY" > publickey
 
     - name: Generate WireGuard configuration
       id: generate_config
       run: |
-        # Define variables
-        PRIVATE_KEY=$(cat privatekey)
-        PUBLIC_KEY=$(cat publickey)
+        # Define server and peer configuration details
+        SERVER_PRIVATE_KEY=$(cat privatekey)
+        SERVER_PUBLIC_KEY=$(cat publickey)
         SERVER_IP="10.0.0.1"
         LISTEN_PORT="51820"
         PEERS_COUNT=${{ github.event.inputs.peers_count }}
 
         # Start the WireGuard server configuration
         WG_CONFIG="[Interface]
-        PrivateKey = $PRIVATE_KEY
-        Address = $SERVER_IP/24
-        ListenPort = $LISTEN_PORT
-        "
+PrivateKey = $SERVER_PRIVATE_KEY
+Address = $SERVER_IP/24
+ListenPort = $LISTEN_PORT
+"
 
         # Generate peer configurations
         for ((i=1; i<=PEERS_COUNT; i++))
@@ -48,29 +53,29 @@ jobs:
           PEER_PUBLIC_KEY=$(echo $PEER_PRIVATE_KEY | wg pubkey)
           PEER_IP="10.0.0.$((i+1))"
 
-          # Add peer to the server configuration
+          # Add peer to server configuration
           WG_CONFIG+="
-        [Peer]
-        PublicKey = $PEER_PUBLIC_KEY
-        AllowedIPs = $PEER_IP/32
-        Endpoint = engage.cloudflareclient.com:2408
-        PersistentKeepalive = 25
-        "
+[Peer]
+PublicKey = $PEER_PUBLIC_KEY
+AllowedIPs = $PEER_IP/32
+Endpoint = engage.cloudflareclient.com:2408
+PersistentKeepalive = 25
+"
 
-          # Create a peer configuration file
+          # Create peer configuration file
           echo "[Interface]
-        PrivateKey = $PEER_PRIVATE_KEY
-        Address = $PEER_IP/24
+PrivateKey = $PEER_PRIVATE_KEY
+Address = $PEER_IP/24
 
-        [Peer]
-        PublicKey = $PUBLIC_KEY
-        AllowedIPs = 0.0.0.0/0, ::/0
-        Endpoint = engage.cloudflareclient.com:2408
-        PersistentKeepalive = 25
-        " > peer-$i.conf
+[Peer]
+PublicKey = $SERVER_PUBLIC_KEY
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = engage.cloudflareclient.com:2408
+PersistentKeepalive = 25
+" > peer-$i.conf
         done
 
-        # Save the server configuration
+        # Save the server configuration to file
         echo "$WG_CONFIG" > wireguard.conf
 
     - name: Show server configuration

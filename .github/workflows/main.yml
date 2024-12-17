@@ -21,7 +21,7 @@ jobs:
       run: |
         echo "Getting obfs4 bridges..."
         # Here we simulate fetching the bridges; in reality, you'd use a proper method to get them
-        bridges=$(echo "obfs4 1.2.3.4:1234 B385560D920F3016 iat-mode=0" | shuf -n 3)
+        bridges=$(echo "obfs4 91.134.80.167:11198 9F6651B7CA83B25D5C7BDC9E420210376199BCBE cert=ATSAxm7VszEv+BR+WoA7qQR0HhUb5wa8MgCr2lD7ZOBzx5DkjBrwHwrV4kZ3Y/APBUGbXQ iat-mode=0" | shuf -n 3)
         echo "Bridges fetched: $bridges"
         echo "BRIDGES=$bridges" >> $GITHUB_ENV
 

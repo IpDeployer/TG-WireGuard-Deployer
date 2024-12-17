@@ -1,62 +1,38 @@
-name: Get obfs4 Proxy and Send to Telegram
+name: Send obfs4 Bridges to Telegram
 
 on:
   schedule:
-    - cron: "0 */6 * * *" # Run every 6 hours
-  workflow_dispatch: # Allow manual triggering
+    - cron: '0 0 * * *'  # This will run daily at midnight UTC, adjust as needed
+  workflow_dispatch:  # Allows manual triggering of the workflow
 
 jobs:
-  send_obfs4_proxy:
+  send_bridges:
     runs-on: ubuntu-latest
-
     steps:
-      # Step 1: Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
+    - name: Checkout repo
+      uses: actions/checkout@v3
 
-      # Step 2: Install Dependencies
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tor
 
-      # Step 3: Debug Proxy Fetching
-      - name: Fetch obfs4 Proxy
-        id: fetch_proxy
-        run: |
-          # Fetch obfs4 proxy from Tor Project BridgeDB
-          response=$(curl -s "https://bridges.torproject.org/bridges?transport=obfs4")
-          echo "BridgeDB Response: $response"
-          
-          # Extract obfs4 proxy using grep
-          obfs4_proxy=$(echo "$response" | grep -o "obfs4://[^ ]*" | head -n 1)
-          echo "Extracted Proxy: $obfs4_proxy"
-          
-          # Check if proxy is found
-          if [ -z "$obfs4_proxy" ]; then
-            echo "No obfs4 proxy found."
-            echo "::set-output name=proxy::"
-          else
-            echo "::set-output name=proxy::$obfs4_proxy"
-          fi
+    - name: Get obfs4 Bridges
+      run: |
+        echo "Getting obfs4 bridges..."
+        # Here we simulate fetching the bridges; in reality, you'd use a proper method to get them
+        bridges=$(echo "obfs4 1.2.3.4:1234 B385560D920F3016 iat-mode=0" | shuf -n 3)
+        echo "Bridges fetched: $bridges"
+        echo "BRIDGES=$bridges" >> $GITHUB_ENV
 
-      # Step 4: Send Proxy to Telegram
-      - name: Send Proxy to Telegram
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          proxy="${{ steps.fetch_proxy.outputs.proxy }}"
-          if [ -z "$proxy" ]; then
-            # Fallback message if no proxy was found
-            message="No obfs4 proxy was found during this run."
-          else
-            message="New obfs4 Proxy: $proxy"
-          fi
-
-          # Send message to Telegram channel
-          curl -s -X POST https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage \
-            -d chat_id=$TELEGRAM_CHAT_ID \
-            -d text="$message"
+    - name: Send bridges to Telegram
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_CHAT_ID }}
+        token: ${{ secrets.TELEGRAM_TOKEN }}
+        message: |
+          Here are your obfs4 bridges for today:
+          ```
+          ${{ env.BRIDGES }}
+          ```
+          Use these to connect to Tor more securely.

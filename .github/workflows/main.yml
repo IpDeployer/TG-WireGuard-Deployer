@@ -1,17 +1,17 @@
 name: Get Tor WebTunnel Bridges
 
 on:
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch: # Allows manual triggering of the workflow
 
 jobs:
-  fetch-bridges:
+  fetch-and-send-bridges:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Install Python
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
@@ -19,45 +19,53 @@ jobs:
     - name: Fetch WebTunnel Bridges
       id: fetch-bridges
       run: |
-        # Install required Python library
+        # Install Python requests library
         python -m pip install requests
 
-        # Fetch bridges from the Tor Project site
+        # Fetch the bridges from the Tor Project website
         python - <<EOF
         import requests
 
-        # Fetch webtunnel bridges
+        # Fetch WebTunnel bridges
         url = "https://bridges.torproject.org/options"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers)
 
         if response.status_code == 200:
-            # Extract bridges (example parsing logic)
-            content = response.text
-            # Save as a file
-            with open("webtunnel_bridges.txt", "w") as f:
-                f.write(content)
+            # Save content to a file
+            with open("webtunnel_bridges.txt", "w") as file:
+                file.write(response.text)
+            print("Bridges fetched and saved to webtunnel_bridges.txt")
         else:
-            raise Exception(f"Failed to fetch bridges: {response.status_code}")
+            raise Exception(f"Failed to fetch bridges: HTTP {response.status_code}")
         EOF
 
-    - name: Send to Telegram
+    - name: Send Bridges to Telegram
       env:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
       run: |
-        # Install Python library for Telegram
+        # Install Python Telegram library
         python -m pip install python-telegram-bot
 
-        # Send the file to Telegram
+        # Check if the file exists and send it to Telegram
         python - <<EOF
         import telegram
+        import os
 
-        # Set up bot and chat ID
+        # Telegram bot setup
         chat_id = "${{ env.TELEGRAM_CHAT_ID }}"
         bot = telegram.Bot(token="${{ env.TELEGRAM_TOKEN }}")
 
-        # Upload the file to Telegram
-        with open("webtunnel_bridges.txt", "rb") as file:
-            bot.send_document(chat_id=chat_id, document=file)
+        # Path to the bridges file
+        file_path = "webtunnel_bridges.txt"
+
+        # Check if the file exists
+        if os.path.exists(file_path):
+            # Send file to Telegram
+            with open(file_path, "rb") as file:
+                bot.send_document(chat_id=chat_id, document=file)
+            print(f"File {file_path} successfully sent to Telegram!")
+        else:
+            raise FileNotFoundError(f"{file_path} not found. Unable to send file.")
         EOF

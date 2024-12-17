@@ -1,75 +1,30 @@
-name: Generate WireGuard Config
+name: Get Tor Bridges and Send to Telegram
 
 on:
   workflow_dispatch:
 
 jobs:
-  generate-config:
+  get-and-send-bridges:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v2
 
-    - name: Install WireGuard tools
-      run: sudo apt-get update && sudo apt-get install -y wireguard-tools
-
-    - name: Generate WireGuard keys
-      id: gen-keys
+    - name: Get webtunnel bridges from Tor website
       run: |
-        # Set umask for security
-        umask 077
-
-        # Generate private and public keys
-        wg genkey | tee privatekey | wg pubkey > publickey
-
-        # Read keys into variables
-        PRIVATE_KEY=$(cat privatekey)
-        PUBLIC_KEY=$(cat publickey)
-
-        # Export keys for later steps
-        echo "PRIVATE_KEY=${PRIVATE_KEY}" >> $GITHUB_ENV
-        echo "PUBLIC_KEY=${PUBLIC_KEY}" >> $GITHUB_ENV
-
-    - name: Create WireGuard configuration
-      id: create-config
-      run: |
-        # Define configuration variables
-        PRIVATE_KEY="${{ env.PRIVATE_KEY }}"
-        PUBLIC_KEY="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
-        PEER_ENDPOINT="Replace_With_Peer_Endpoint" # Update with actual peer endpoint
-
-        # Create configuration
-        cat > wg0.conf <<EOL
-        [Interface]
-        PrivateKey = $PRIVATE_KEY
-        Address = 172.16.0.2/32, 2606:4700:110:8c8f:b67f:3504:3651:7e61/128
-        ListenPort = 51820
-
-        [Peer]
-        PublicKey = $PUBLIC_KEY
-        AllowedIPs = 0.0.0.0/0, ::/0
-        Endpoint = $PEER_ENDPOINT
-        PersistentKeepalive = 25
-        EOL
-
-        # Display configuration
-        cat wg0.conf
+        # Fetch bridges from Tor Bridges website
+        response=$(curl -s --data "type=webtunnel" https://bridges.torproject.org/options)
+        bridge1=$(echo "$response" | jq -r '.bridges[0]')
+        bridge2=$(echo "$response" | jq -r '.bridges[1]')
         
-        # Base64 encode the configuration and remove newlines
-        WIREGUARD_CONFIG=$(cat wg0.conf | base64 -w 0)
-        echo "WIREGUARD_CONFIG=${WIREGUARD_CONFIG}" >> $GITHUB_ENV
+        echo "Bridge 1: $bridge1"
+        echo "Bridge 2: $bridge2"
+        
+        # Send bridges to Telegram
+        curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d text="Here are your WebTunnel Bridges:\n1. $bridge1\n2. $bridge2"
 
-    - name: Send configuration to Telegram
-      env:
-        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      run: |
-        # Decode configuration from base64
-        CONFIG=$(echo "${{ env.WIREGUARD_CONFIG }}" | base64 --decode)
-
-        # Send the configuration to Telegram
-        curl -s -X POST https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage \
-          -d chat_id=$TELEGRAM_CHAT_ID \
-          -d text="WireGuard Configuration:\n\n\`\`\`\n$CONFIG\n\`\`\`" \
-          -d parse_mode=MarkdownV2
+    - name: Notify success
+      run: echo "Bridges have been successfully sent to Telegram!"

@@ -2,8 +2,8 @@ name: Get obfs4 Proxy and Send to Telegram
 
 on:
   schedule:
-    - cron: "0 */6 * * *" # Runs every 6 hours
-  workflow_dispatch: # Allows manual triggering of the workflow
+    - cron: "0 */6 * * *" # Run every 6 hours
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   send_obfs4_proxy:
@@ -16,19 +16,31 @@ jobs:
         with:
           python-version: "3.10"
 
-      # Step 2: Install required libraries
+      # Step 2: Install Dependencies
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests
 
-      # Step 3: Get obfs4 Proxy
+      # Step 3: Debug Proxy Fetching
       - name: Fetch obfs4 Proxy
         id: fetch_proxy
         run: |
-          # Example: Fetching an obfs4 bridge (Replace with actual command to get your obfs4 proxy)
-          obfs4_proxy=$(curl -s https://bridges.torproject.org/bridges?transport=obfs4 | grep -o "obfs4://[^ ]*" | head -n 1)
-          echo "::set-output name=proxy::$obfs4_proxy"
+          # Fetch obfs4 proxy from Tor Project BridgeDB
+          response=$(curl -s "https://bridges.torproject.org/bridges?transport=obfs4")
+          echo "BridgeDB Response: $response"
+          
+          # Extract obfs4 proxy using grep
+          obfs4_proxy=$(echo "$response" | grep -o "obfs4://[^ ]*" | head -n 1)
+          echo "Extracted Proxy: $obfs4_proxy"
+          
+          # Check if proxy is found
+          if [ -z "$obfs4_proxy" ]; then
+            echo "No obfs4 proxy found."
+            echo "::set-output name=proxy::"
+          else
+            echo "::set-output name=proxy::$obfs4_proxy"
+          fi
 
       # Step 4: Send Proxy to Telegram
       - name: Send Proxy to Telegram
@@ -38,10 +50,13 @@ jobs:
         run: |
           proxy="${{ steps.fetch_proxy.outputs.proxy }}"
           if [ -z "$proxy" ]; then
-            echo "No obfs4 proxy found."
-            exit 1
+            # Fallback message if no proxy was found
+            message="No obfs4 proxy was found during this run."
+          else
+            message="New obfs4 Proxy: $proxy"
           fi
-          message="New obfs4 Proxy: $proxy"
+
+          # Send message to Telegram channel
           curl -s -X POST https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage \
             -d chat_id=$TELEGRAM_CHAT_ID \
             -d text="$message"

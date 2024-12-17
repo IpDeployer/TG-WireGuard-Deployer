@@ -1,30 +1,63 @@
-name: Get Tor Bridges and Send to Telegram
+name: Get Tor WebTunnel Bridges
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
-  get-and-send-bridges:
+  fetch-bridges:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-    - name: Get webtunnel bridges from Tor website
+    - name: Install Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Fetch WebTunnel Bridges
+      id: fetch-bridges
       run: |
-        # Fetch bridges from Tor Bridges website
-        response=$(curl -s --data "type=webtunnel" https://bridges.torproject.org/options)
-        bridge1=$(echo "$response" | jq -r '.bridges[0]')
-        bridge2=$(echo "$response" | jq -r '.bridges[1]')
-        
-        echo "Bridge 1: $bridge1"
-        echo "Bridge 2: $bridge2"
-        
-        # Send bridges to Telegram
-        curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -d text="Here are your WebTunnel Bridges:\n1. $bridge1\n2. $bridge2"
+        # Install required Python library
+        python -m pip install requests
 
-    - name: Notify success
-      run: echo "Bridges have been successfully sent to Telegram!"
+        # Fetch bridges from the Tor Project site
+        python - <<EOF
+        import requests
+
+        # Fetch webtunnel bridges
+        url = "https://bridges.torproject.org/options"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            # Extract bridges (example parsing logic)
+            content = response.text
+            # Save as a file
+            with open("webtunnel_bridges.txt", "w") as f:
+                f.write(content)
+        else:
+            raise Exception(f"Failed to fetch bridges: {response.status_code}")
+        EOF
+
+    - name: Send to Telegram
+      env:
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      run: |
+        # Install Python library for Telegram
+        python -m pip install python-telegram-bot
+
+        # Send the file to Telegram
+        python - <<EOF
+        import telegram
+
+        # Set up bot and chat ID
+        chat_id = "${{ env.TELEGRAM_CHAT_ID }}"
+        bot = telegram.Bot(token="${{ env.TELEGRAM_TOKEN }}")
+
+        # Upload the file to Telegram
+        with open("webtunnel_bridges.txt", "rb") as file:
+            bot.send_document(chat_id=chat_id, document=file)
+        EOF
